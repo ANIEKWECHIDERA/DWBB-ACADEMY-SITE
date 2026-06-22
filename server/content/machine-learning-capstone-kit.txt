@@ -1,0 +1,9 @@
+DWBB Academy - Machine Learning Capstone Kit
+
+Included resources:
+- Model experiment tracker
+- Evaluation checklist
+- Deployment planning worksheet
+- Capstone presentation prompt sheet
+
+This is a protected demo download generated for the digital course store flow.

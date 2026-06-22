@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { DigitalCourseStoreSection } from "@/components/sections/courses/DigitalCourseStoreSection";
 import { CourseCard } from "@/components/shared/CourseCard";
 import { SectionHeader } from "@/components/shared/SectionHeader";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,8 @@ export default function CoursesIndex() {
           </div>
         </div>
       </section>
+
+      <DigitalCourseStoreSection />
     </>
   );
 }

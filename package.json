@@ -5,11 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:client": "vite",
+    "dev:server": "node server/index.mjs",
+    "dev:full": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start:server": "node server/index.mjs",
+    "test:webhook": "node scripts/test-paystack-webhook.mjs"
   },
   "dependencies": {
+    "@paystack/inline-js": "^2.23.1",
     "@radix-ui/react-accordion": "^1.2.14",
     "@radix-ui/react-avatar": "^1.2.0",
     "@radix-ui/react-dialog": "^1.1.17",
@@ -23,8 +29,13 @@
     "@radix-ui/react-toast": "^1.2.17",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "concurrently": "^10.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.21.0",
+    "nodemailer": "^9.0.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.18.0",

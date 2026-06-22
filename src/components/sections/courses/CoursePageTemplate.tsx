@@ -1,5 +1,6 @@
 import { CheckCircle2, ArrowRight, CalendarDays, Clock3, BriefcaseBusiness } from "lucide-react";
 
+import { PurchaseCourseButton } from "@/components/commerce/PurchaseCourseButton";
 import { SectionHeader } from "@/components/shared/SectionHeader";
 import { Accordion } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
@@ -27,14 +28,10 @@ export function CoursePageTemplate({ course }: { course: Course }) {
                 <QuickStat icon={<BriefcaseBusiness className="h-5 w-5 text-brand-gold" />} label="Price" value={course.price} />
               </div>
               <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-                <Button asChild variant="gold">
-                  <a href={buildCourseEnquiryUrl(course.title)} target="_blank" rel="noreferrer">
-                    Enroll Now <ArrowRight className="h-4 w-4" />
-                  </a>
-                </Button>
+                <PurchaseCourseButton course={course} className="justify-center" label="Buy Digital Course" />
                 <Button asChild variant="outline">
                   <a href={buildCourseEnquiryUrl(course.title)} target="_blank" rel="noreferrer">
-                    Ask a Question
+                    Ask a Question <ArrowRight className="h-4 w-4" />
                   </a>
                 </Button>
               </div>
@@ -144,12 +141,11 @@ export function CoursePageTemplate({ course }: { course: Course }) {
             <div className="mt-6 rounded-3xl bg-brand-gold/15 px-4 py-4 text-sm font-semibold text-slate-800">
               {course.earlyBirdDiscount}
             </div>
+            <div className="mt-4 rounded-3xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
+              Includes instant access to downloadable learning materials and confirmation by email after verified payment.
+            </div>
             <div className="mt-6 grid gap-3">
-              <Button asChild variant="gold">
-                <a href={buildCourseEnquiryUrl(course.title)} target="_blank" rel="noreferrer">
-                  Enroll Now via WhatsApp
-                </a>
-              </Button>
+              <PurchaseCourseButton course={course} className="w-full" label="Buy Digital Course" />
               <Button asChild variant="ghost" className="rounded-full border border-slate-200">
                 <a href={buildCourseEnquiryUrl(course.title)} target="_blank" rel="noreferrer">
                   Ask a Question via WhatsApp

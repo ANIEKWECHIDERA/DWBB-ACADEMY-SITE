@@ -1,0 +1,9 @@
+DWBB Academy - Web Development Starter Pack
+
+Included resources:
+- Project planning starter sheet
+- Frontend launch checklist
+- Deployment readiness notes
+- Portfolio improvement prompts
+
+This is a protected demo download generated for the digital course store flow.

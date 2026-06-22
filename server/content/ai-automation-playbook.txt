@@ -1,0 +1,9 @@
+DWBB Academy - AI & Automation Playbook
+
+Included resources:
+- Prompt design worksheet
+- Automation mapping template
+- AI workflow audit checklist
+- Implementation notes for common business use cases
+
+This is a protected demo download generated for the digital course store flow.

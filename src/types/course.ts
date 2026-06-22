@@ -22,11 +22,13 @@ export interface Course {
   level: "Beginner" | "Intermediate" | "Advanced";
   duration: string;
   startDate: string;
+  priceNaira: number;
   price: string;
   priceUSD: string;
   earlyBirdDiscount: string;
   color: CourseColor;
   icon: string;
+  digitalDeliverables: string[];
   outcomes: string[];
   curriculum: CourseModule[];
   targetAudience: string[];

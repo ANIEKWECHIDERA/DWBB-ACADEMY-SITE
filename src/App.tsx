@@ -10,6 +10,8 @@ const About = lazy(() => import("@/pages/About"));
 const Blog = lazy(() => import("@/pages/Blog"));
 const BlogPost = lazy(() => import("@/pages/BlogPost"));
 const Contact = lazy(() => import("@/pages/Contact"));
+const PaymentConsole = lazy(() => import("@/pages/PaymentConsole"));
+const PaymentSuccess = lazy(() => import("@/pages/PaymentSuccess"));
 const CoursesIndex = lazy(() => import("@/pages/courses/CoursesIndex"));
 const DataAnalytics = lazy(() => import("@/pages/courses/DataAnalytics"));
 const WebDevelopment = lazy(() => import("@/pages/courses/WebDevelopment"));
@@ -44,6 +46,8 @@ export default function App() {
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/payment/success" element={<PaymentSuccess />} />
+            <Route path="/payments/console" element={<PaymentConsole />} />
           </Route>
         </Routes>
       </Suspense>

@@ -1,0 +1,9 @@
+DWBB Academy - Mobile App Development Pack
+
+Included resources:
+- App structure planning guide
+- Firebase integration notes
+- Device testing checklist
+- Store submission readiness prompts
+
+This is a protected demo download generated for the digital course store flow.

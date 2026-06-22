@@ -1,0 +1,9 @@
+DWBB Academy - Data Analytics Toolkit
+
+Included resources:
+- Data cleaning workflow checklist
+- Dashboard planning worksheet
+- Practice dataset notes
+- Capstone submission roadmap
+
+This is a protected demo download generated for the digital course store flow.

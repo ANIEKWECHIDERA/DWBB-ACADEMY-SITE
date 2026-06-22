@@ -1,11 +1,11 @@
 import { CalendarDays, Clock3, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { PurchaseCourseButton } from "@/components/commerce/PurchaseCourseButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { buildCourseEnquiryUrl } from "@/lib/whatsapp";
 import type { Course } from "@/types/course";
 
 export function CourseCard({ course }: { course: Course }) {
@@ -37,11 +37,7 @@ export function CourseCard({ course }: { course: Course }) {
             Learn More <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
-        <Button asChild variant="gold">
-          <a href={buildCourseEnquiryUrl(course.title)} target="_blank" rel="noreferrer">
-            Enroll Now
-          </a>
-        </Button>
+        <PurchaseCourseButton course={course} label="Buy Now" />
       </div>
     </Card>
   );

@@ -1,0 +1,193 @@
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, Download, X } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
+import { startCourseCheckout, type PurchaseFormValues, type VerificationResponse } from "@/lib/payments";
+import { savePaymentSession } from "@/lib/payment-session";
+import type { Course } from "@/types/course";
+
+const initialValues: PurchaseFormValues = {
+  name: "",
+  email: "",
+  phone: "",
+};
+
+export function PurchaseCourseButton({
+  course,
+  label = "Buy Digital Course",
+  className,
+  variant = "gold",
+}: {
+  course: Course;
+  label?: string;
+  className?: string;
+  variant?: "gold" | "ghost" | "default" | "outline";
+}) {
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [values, setValues] = useState<PurchaseFormValues>(initialValues);
+  const [result, setResult] = useState<VerificationResponse | null>(null);
+  const { pushToast } = useToast();
+  const navigate = useNavigate();
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const { reference, verification } = await startCourseCheckout(course, values);
+      setResult(verification);
+      savePaymentSession(reference, verification);
+      pushToast({
+        title: "Payment verified",
+        description: "Your course materials are ready to download.",
+      });
+      setOpen(false);
+      navigate(`/payment/success?reference=${encodeURIComponent(reference)}`);
+    } catch (error) {
+      pushToast({
+        title: "Checkout interrupted",
+        description: error instanceof Error ? error.message : "We could not complete the payment flow.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setSubmitting(false);
+  };
+
+  return (
+    <>
+      <Button className={className} onClick={() => setOpen(true)} type="button" variant={variant}>
+        {label}
+      </Button>
+
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            className="fixed inset-0 z-[130] bg-slate-950/60 px-4 py-8 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="flex min-h-full items-center justify-center">
+              <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 12 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="w-full max-w-2xl"
+              >
+                <Card className="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-gold">Digital Course Checkout</p>
+                      <h3 className="mt-3 text-3xl font-bold text-slate-950">{course.title}</h3>
+                      <p className="mt-2 text-sm leading-7 text-slate-600">
+                        One-time payment. Instant download access after verified payment, plus confirmation email delivery.
+                      </p>
+                    </div>
+                    <button type="button" aria-label="Close checkout" onClick={handleClose}>
+                      <X className="h-5 w-5 text-slate-500" />
+                    </button>
+                  </div>
+
+                  {result ? (
+                    <div className="mt-8 space-y-5">
+                      <Card className="border border-brand-green/30 bg-brand-green/5 p-5">
+                        <p className="font-semibold text-slate-950">{result.message}</p>
+                        <a
+                          className="mt-4 inline-flex items-center gap-2 font-semibold text-deep-blue"
+                          href={result.downloadUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download course materials
+                        </a>
+                        {result.emailPreviewUrl ? (
+                          <a
+                            className="mt-3 block text-sm text-slate-600 underline"
+                            href={result.emailPreviewUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open test email preview
+                          </a>
+                        ) : (
+                          <p className="mt-3 text-sm text-slate-600">A confirmation email has been sent to {values.email}.</p>
+                        )}
+                      </Card>
+                      <Button className="w-full" onClick={handleClose} type="button" variant="gold">
+                        Continue Browsing
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_0.9fr]">
+                      <form className="space-y-4" onSubmit={handleSubmit}>
+                        <div>
+                          <Label htmlFor={`name-${course.slug}`}>Full Name *</Label>
+                          <Input
+                            id={`name-${course.slug}`}
+                            required
+                            value={values.name}
+                            onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`email-${course.slug}`}>Email Address *</Label>
+                          <Input
+                            id={`email-${course.slug}`}
+                            required
+                            type="email"
+                            value={values.email}
+                            onChange={(event) => setValues((current) => ({ ...current, email: event.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`phone-${course.slug}`}>Phone Number</Label>
+                          <Input
+                            id={`phone-${course.slug}`}
+                            value={values.phone}
+                            onChange={(event) => setValues((current) => ({ ...current, phone: event.target.value }))}
+                          />
+                        </div>
+                        <Button className="w-full" disabled={submitting} type="submit" variant="gold">
+                          {submitting ? "Preparing checkout..." : "Continue to Paystack"}
+                        </Button>
+                      </form>
+
+                      <Card className="border border-slate-200 bg-slate-50 p-5">
+                        <p className="text-sm uppercase tracking-[0.16em] text-slate-500">Order Summary</p>
+                        <p className="mt-3 text-2xl font-bold text-slate-950">{course.price}</p>
+                        <p className="mt-1 text-sm text-slate-500">{course.priceUSD}</p>
+                        <p className="mt-5 text-sm font-semibold text-slate-950">What you get immediately:</p>
+                        <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-600">
+                          {course.digitalDeliverables.map((item) => (
+                            <li key={item}>• {item}</li>
+                          ))}
+                        </ul>
+                        <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">
+                          One-time payment only <ArrowRight className="h-3.5 w-3.5" />
+                        </p>
+                      </Card>
+                    </div>
+                  )}
+                </Card>
+              </motion.div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </>
+  );
+}
