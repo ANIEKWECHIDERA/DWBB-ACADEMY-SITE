@@ -39,14 +39,14 @@ then set this webhook URL in Paystack Dashboard:
 ## Notes
 
 - The server already verifies the `x-paystack-signature` header using your Paystack secret key.
-- Webhook events are logged locally to:
+- Webhook events are logged locally only when `ENABLE_PAYMENT_DEBUG=true`:
   - `server/.data/webhook-events.json`
-- Transaction initialization attempts are logged locally to:
+- Transaction initialization attempts are logged locally only when `ENABLE_PAYMENT_DEBUG=true`:
   - `server/.data/payment-attempts.json`
 
 ## Useful debug endpoints
 
-When the local backend is running:
+When the local backend is running and `ENABLE_PAYMENT_DEBUG=true`:
 
 - `GET /api/payments/debug/attempts`
 - `GET /api/payments/debug/webhooks`

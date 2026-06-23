@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { clearPaymentSession, getPaymentSession } from "@/lib/payment-session";
 import type { VerificationResponse } from "@/lib/payments";
 
+const paymentDebugEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PAYMENT_DEBUG === "true";
+
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const reference = searchParams.get("reference") || searchParams.get("trxref") || "";
@@ -118,11 +120,13 @@ export default function PaymentSuccess() {
             </div>
           ) : null}
 
-          <div className="mt-8 text-center">
-            <Button asChild className="rounded-full border border-slate-200 bg-white" variant="ghost">
-              <Link to="/payments/console">Open Payment Console</Link>
-            </Button>
-          </div>
+          {paymentDebugEnabled ? (
+            <div className="mt-8 text-center">
+              <Button asChild className="rounded-full border border-slate-200 bg-white" variant="ghost">
+                <Link to="/payments/console">Open Payment Console</Link>
+              </Button>
+            </div>
+          ) : null}
         </Card>
       </div>
     </section>

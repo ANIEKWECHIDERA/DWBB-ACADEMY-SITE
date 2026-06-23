@@ -1,38 +1,15 @@
 [
   {
     "type": "initialize",
-    "reference": "dwbb-web-development-1782127463496-walsgs",
-    "accessCode": "zvfohy36c6pl768",
+    "reference": "dwbb-web-development-1782214347456-6u9l6s",
+    "accessCode": "r59jm1nw5swyog1",
     "courseSlug": "web-development",
     "courseTitle": "Web Development Bootcamp",
     "amount": 35000000,
-    "email": "webhook@example.com",
-    "name": "Webhook Test",
-    "phone": "08011111111",
-    "createdAt": "2026-06-22T11:24:24.442Z"
-  },
-  {
-    "type": "initialize",
-    "reference": "dwbb-ai-automation-1782130114883-7sdtqq",
-    "accessCode": "sbhlnbux9ndc99a",
-    "courseSlug": "ai-automation",
-    "courseTitle": "AI & Automation",
-    "amount": 18000000,
-    "email": "chideraaniekwederah73@gmail.com",
+    "email": "loftysonix@gmail.com",
     "name": "Chidera Aniekwe",
     "phone": "08106258080",
-    "createdAt": "2026-06-22T12:08:35.943Z"
-  },
-  {
-    "type": "initialize",
-    "reference": "dwbb-mobile-app-1782132636428-lz8p5h",
-    "accessCode": "cgfvan7eikl7x0n",
-    "courseSlug": "mobile-app",
-    "courseTitle": "Mobile App Development",
-    "amount": 45000000,
-    "email": "chideraaniekwederah73@gmail.com",
-    "name": "Chidera Aniekwe",
-    "phone": "08106258080",
-    "createdAt": "2026-06-22T12:50:37.376Z"
+    "appBaseUrl": "http://localhost:5173",
+    "createdAt": "2026-06-23T11:32:28.531Z"
   }
 ]

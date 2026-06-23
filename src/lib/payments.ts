@@ -37,33 +37,15 @@ export async function startCourseCheckout(course: Course, customer: PurchaseForm
     throw new Error(initializePayload.error || "Unable to initialize payment.");
   }
 
-  return new Promise<{ reference: string; verification: VerificationResponse }>((resolve, reject) => {
+  return new Promise<{ reference: string; callbackUrl: string }>((resolve, reject) => {
     const popup = new PaystackPop();
 
     popup.resumeTransaction(initializePayload.accessCode, {
       onSuccess: async (transaction: { reference: string }) => {
-        try {
-          const verifyResponse = await fetch("/api/payments/verify", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ reference: transaction.reference }),
-          });
-
-          const verificationPayload = await verifyResponse.json();
-
-          if (!verifyResponse.ok) {
-            throw new Error(verificationPayload.error || "Unable to verify payment.");
-          }
-
-          resolve({
-            reference: transaction.reference,
-            verification: verificationPayload as VerificationResponse,
-          });
-        } catch (error) {
-          reject(error);
-        }
+        resolve({
+          reference: transaction.reference,
+          callbackUrl: initializePayload.callbackUrl,
+        });
       },
       onCancel: () => {
         reject(new Error("Payment cancelled."));

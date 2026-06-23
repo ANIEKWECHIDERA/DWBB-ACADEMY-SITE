@@ -1,0 +1,425 @@
+- generic [ref=e8]:
+  - banner [ref=e9]:
+    - generic [ref=e11]:
+      - link "DWBB Academy logo DWBB Academy Digital career launchpad" [ref=e12] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e13]:
+          - img "DWBB Academy logo" [ref=e14]
+          - generic [ref=e15]:
+            - paragraph [ref=e16]: DWBB Academy
+            - paragraph [ref=e17]: Digital career launchpad
+      - navigation [ref=e18]:
+        - link "Home" [ref=e19] [cursor=pointer]:
+          - /url: /
+          - text: Home
+        - link "About" [ref=e21] [cursor=pointer]:
+          - /url: /about
+          - text: About
+        - button "Courses" [ref=e23] [cursor=pointer]:
+          - text: Courses
+          - img [ref=e24]
+        - link "Blog" [ref=e26] [cursor=pointer]:
+          - /url: /blog
+          - text: Blog
+        - link "Contact" [ref=e27] [cursor=pointer]:
+          - /url: /contact
+          - text: Contact
+      - link "Enroll Now" [ref=e29] [cursor=pointer]:
+        - /url: https://wa.me/2348106258080?text=Hello%20DWBB%20Academy!%20I'm%20interested%20in%20your%20courses.%20Can%20you%20help%20me%20get%20started%3F
+  - main [ref=e30]:
+    - generic [ref=e31]:
+      - generic:
+        - img
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - generic [ref=e36]: 🎓 Nigeria's Rising Digital Academy
+          - heading "Equip Yourself for the Digital Economy" [level=1] [ref=e37]
+          - paragraph [ref=e38]: Hands-on training in Data Analytics, Web & Mobile Development, AI, and more. Learn from industry experts and build a career that matters.
+          - generic [ref=e39]:
+            - link "Start Learning Today" [ref=e40] [cursor=pointer]:
+              - /url: https://wa.me/2348106258080?text=Hello%20DWBB%20Academy!%20I'm%20interested%20in%20your%20courses.%20Can%20you%20help%20me%20get%20started%3F
+              - text: Start Learning Today
+              - img [ref=e41]
+            - link "Explore Courses" [ref=e43] [cursor=pointer]:
+              - /url: /courses
+          - generic [ref=e44]:
+            - generic [ref=e45]: 500+ Graduates
+            - img [ref=e46]
+            - generic [ref=e48]: 5 Expert Instructors
+            - img [ref=e49]
+            - generic [ref=e51]: 92% Employment Rate
+        - generic [ref=e52]:
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - paragraph [ref=e57]: Data Analytics
+              - paragraph [ref=e58]: Live sessions, projects, mentorship, and certification.
+            - generic [ref=e59]:
+              - paragraph [ref=e61]: Web Development
+              - paragraph [ref=e62]: Live sessions, projects, mentorship, and certification.
+            - generic [ref=e63]:
+              - paragraph [ref=e65]: AI & Automation
+              - paragraph [ref=e66]: Live sessions, projects, mentorship, and certification.
+            - generic [ref=e67]:
+              - paragraph [ref=e69]: Mobile App Dev
+              - paragraph [ref=e70]: Live sessions, projects, mentorship, and certification.
+          - generic [ref=e72]: "Next Cohort: July 6, 2026"
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - paragraph [ref=e78]: 500+
+        - paragraph [ref=e79]: Graduates
+      - generic [ref=e80]:
+        - paragraph [ref=e81]: "5"
+        - paragraph [ref=e82]: Expert Instructors
+      - generic [ref=e83]:
+        - paragraph [ref=e84]: 6 Weeks
+        - paragraph [ref=e85]: Intensive Bootcamp
+      - generic [ref=e86]:
+        - paragraph [ref=e87]: 92%
+        - paragraph [ref=e88]: Employment Rate
+    - generic [ref=e90]:
+      - generic [ref=e91]:
+        - paragraph [ref=e92]: Why DWBB
+        - heading "Why Choose DWBB Academy?" [level=2] [ref=e93]
+        - paragraph [ref=e94]: We don't just teach - we transform. Here's what sets us apart.
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - generic [ref=e97]: 🎯
+          - heading "Practical, Project-Based Learning" [level=3] [ref=e98]
+          - paragraph [ref=e99]: Every course includes real-world projects you can add to your portfolio.
+        - generic [ref=e100]:
+          - generic [ref=e101]: 👨‍🏫
+          - heading "Expert-Led Instruction" [level=3] [ref=e102]
+          - paragraph [ref=e103]: Learn from industry professionals with proven track records.
+        - generic [ref=e104]:
+          - generic [ref=e105]: 📜
+          - heading "Certifications Recognized Globally" [level=3] [ref=e106]
+          - paragraph [ref=e107]: Our certificates validate skills for local and international opportunities.
+        - generic [ref=e108]:
+          - generic [ref=e109]: 🤝
+          - heading "Mentorship & Community" [level=3] [ref=e110]
+          - paragraph [ref=e111]: Access a global network of learners, mentors, and alumni.
+        - generic [ref=e112]:
+          - generic [ref=e113]: 💻
+          - heading "Learn from Anywhere" [level=3] [ref=e114]
+          - paragraph [ref=e115]: Flexible learning designed for students, professionals, and entrepreneurs.
+        - generic [ref=e116]:
+          - generic [ref=e117]: 🚀
+          - heading "Career Advancement Support" [level=3] [ref=e118]
+          - paragraph [ref=e119]: CV review, interview prep, and job-placement guidance included.
+    - generic [ref=e121]:
+      - generic [ref=e122]:
+        - paragraph [ref=e123]: Popular Tracks
+        - heading "Our Most Popular Courses" [level=2] [ref=e124]
+        - paragraph [ref=e125]: Choose a path that fits your goals. All courses are beginner-friendly.
+      - generic [ref=e126]:
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - generic [ref=e129]: 📊
+            - generic [ref=e130]: Beginner
+          - heading "Data Analytics" [level=3] [ref=e131]
+          - paragraph [ref=e132]: Master the tools and techniques used by professional data analysts to collect, clean, analyze, and visualize data.
+          - generic [ref=e134]:
+            - generic [ref=e135]:
+              - img [ref=e136]
+              - generic [ref=e139]: 6 Weeks
+            - generic [ref=e140]:
+              - img [ref=e141]
+              - generic [ref=e143]: July 6, 2026
+          - paragraph [ref=e144]:
+            - text: N250,000
+            - generic [ref=e145]: "| $160"
+          - generic [ref=e146]:
+            - link "Learn More" [ref=e147] [cursor=pointer]:
+              - /url: /courses/data-analytics
+              - text: Learn More
+              - img [ref=e148]
+            - button "Buy Now" [ref=e150] [cursor=pointer]
+            - generic [ref=e420]:
+              - generic [ref=e421]:
+                - generic [ref=e422]:
+                  - paragraph [ref=e423]: Digital Course Checkout
+                  - heading "Data Analytics Bootcamp" [level=3] [ref=e424]
+                  - paragraph [ref=e425]: One-time payment. Instant download access after verified payment, plus confirmation email delivery.
+                - button "Close checkout" [ref=e426] [cursor=pointer]:
+                  - img [ref=e427]
+              - generic [ref=e430]:
+                - generic [ref=e431]:
+                  - generic [ref=e432]:
+                    - generic [ref=e433]: Full Name *
+                    - textbox "Full Name *" [ref=e434]: Codex Test Buyer 2
+                  - generic [ref=e435]:
+                    - generic [ref=e436]: Email Address *
+                    - textbox "Email Address *" [ref=e437]: codex-test-2@example.com
+                  - generic [ref=e438]:
+                    - generic [ref=e439]: Phone Number
+                    - textbox "Phone Number" [ref=e440]: "08012345678"
+                  - button "Continue to Paystack" [ref=e441] [cursor=pointer]
+                - generic [ref=e442]:
+                  - paragraph [ref=e443]: Order Summary
+                  - paragraph [ref=e444]: N250,000
+                  - paragraph [ref=e445]: $160
+                  - paragraph [ref=e446]: "What you get immediately:"
+                  - list [ref=e447]:
+                    - listitem [ref=e448]: • Downloadable lesson guides and templates
+                    - listitem [ref=e449]: • Practice datasets for portfolio projects
+                    - listitem [ref=e450]: • Capstone workbook and review checklist
+                  - paragraph [ref=e451]:
+                    - text: One-time payment only
+                    - img [ref=e452]
+        - generic [ref=e151]:
+          - generic [ref=e152]:
+            - generic [ref=e153]: 💻
+            - generic [ref=e154]: Beginner
+          - heading "Web Development" [level=3] [ref=e155]
+          - paragraph [ref=e156]: Learn modern web development with HTML, CSS, JavaScript, React, and backend integration to become a full-stack capable developer.
+          - generic [ref=e158]:
+            - generic [ref=e159]:
+              - img [ref=e160]
+              - generic [ref=e163]: 6 Weeks
+            - generic [ref=e164]:
+              - img [ref=e165]
+              - generic [ref=e167]: July 6, 2026
+          - paragraph [ref=e168]:
+            - text: N350,000
+            - generic [ref=e169]: "| $225"
+          - generic [ref=e170]:
+            - link "Learn More" [ref=e171] [cursor=pointer]:
+              - /url: /courses/web-development
+              - text: Learn More
+              - img [ref=e172]
+            - button "Buy Now" [ref=e174] [cursor=pointer]
+        - generic [ref=e175]:
+          - generic [ref=e176]:
+            - generic [ref=e177]: 📱
+            - generic [ref=e178]: Intermediate
+          - heading "Mobile App Dev" [level=3] [ref=e179]
+          - paragraph [ref=e180]: Learn to design and build cross-platform mobile applications using React Native from UI to backend integration and app-store readiness.
+          - generic [ref=e182]:
+            - generic [ref=e183]:
+              - img [ref=e184]
+              - generic [ref=e187]: 6 Weeks
+            - generic [ref=e188]:
+              - img [ref=e189]
+              - generic [ref=e191]: July 6, 2026
+          - paragraph [ref=e192]:
+            - text: N450,000
+            - generic [ref=e193]: "| $290"
+          - generic [ref=e194]:
+            - link "Learn More" [ref=e195] [cursor=pointer]:
+              - /url: /courses/mobile-app
+              - text: Learn More
+              - img [ref=e196]
+            - button "Buy Now" [ref=e198] [cursor=pointer]
+        - generic [ref=e199]:
+          - generic [ref=e200]:
+            - generic [ref=e201]: 🤖
+            - generic [ref=e202]: Beginner
+          - heading "AI & Automation" [level=3] [ref=e203]
+          - paragraph [ref=e204]: Learn how to leverage AI tools, build automation workflows, and implement AI-powered solutions that save time and increase productivity.
+          - generic [ref=e206]:
+            - generic [ref=e207]:
+              - img [ref=e208]
+              - generic [ref=e211]: 6 Weeks
+            - generic [ref=e212]:
+              - img [ref=e213]
+              - generic [ref=e215]: July 6, 2026
+          - paragraph [ref=e216]:
+            - text: N180,000
+            - generic [ref=e217]: "| $115"
+          - generic [ref=e218]:
+            - link "Learn More" [ref=e219] [cursor=pointer]:
+              - /url: /courses/ai-automation
+              - text: Learn More
+              - img [ref=e220]
+            - button "Buy Now" [ref=e222] [cursor=pointer]
+        - generic [ref=e223]:
+          - generic [ref=e224]:
+            - generic [ref=e225]: 🧠
+            - generic [ref=e226]: Intermediate
+          - heading "Machine Learning" [level=3] [ref=e227]
+          - paragraph [ref=e228]: Go from Python basics to building and deploying machine learning models that solve real-world problems using industry-standard tools and frameworks.
+          - generic [ref=e230]:
+            - generic [ref=e231]:
+              - img [ref=e232]
+              - generic [ref=e235]: 6 Weeks
+            - generic [ref=e236]:
+              - img [ref=e237]
+              - generic [ref=e239]: July 6, 2026
+          - paragraph [ref=e240]:
+            - text: N600,000
+            - generic [ref=e241]: "| $385"
+          - generic [ref=e242]:
+            - link "Learn More" [ref=e243] [cursor=pointer]:
+              - /url: /courses/machine-learning
+              - text: Learn More
+              - img [ref=e244]
+            - button "Buy Now" [ref=e246] [cursor=pointer]
+      - link "View All Courses" [ref=e248] [cursor=pointer]:
+        - /url: /courses
+    - generic [ref=e250]:
+      - generic [ref=e251]:
+        - paragraph [ref=e252]: How It Works
+        - heading "A simple path from interest to impact" [level=2] [ref=e253]
+      - generic [ref=e254]:
+        - generic [ref=e256]:
+          - generic [ref=e257]: "01"
+          - heading "Choose Your Course" [level=3] [ref=e258]
+          - paragraph [ref=e259]: Browse our catalog and pick the skill you want to build.
+        - generic [ref=e260]:
+          - generic [ref=e261]: "02"
+          - heading "Enroll & Pay" [level=3] [ref=e262]
+          - paragraph [ref=e263]: Register online or via WhatsApp and secure your spot.
+        - generic [ref=e264]:
+          - generic [ref=e265]: "03"
+          - heading "Learn & Build" [level=3] [ref=e266]
+          - paragraph [ref=e267]: Attend live sessions, complete projects, and get mentored.
+        - generic [ref=e268]:
+          - generic [ref=e269]: "04"
+          - heading "Get Certified" [level=3] [ref=e270]
+          - paragraph [ref=e271]: Graduate with a recognized certificate and career support.
+    - generic [ref=e273]:
+      - generic [ref=e274]:
+        - paragraph [ref=e275]: Success Stories
+        - heading "What our learners say after the transformation" [level=2] [ref=e276]
+      - generic [ref=e277]:
+        - generic [ref=e278]:
+          - generic [ref=e279]:
+            - generic [ref=e280]: AO
+            - generic [ref=e281]:
+              - paragraph [ref=e282]: Adaeze Okonkwo
+              - paragraph [ref=e283]: Data Analyst at FinTech Co.
+              - paragraph [ref=e284]: Data Analytics Bootcamp
+          - paragraph [ref=e285]: "\"DWBB Academy gave me the practical skills I needed to break into data analytics. Within 3 months of graduating, I landed my first role at a fintech company.\""
+          - paragraph [ref=e286]: ★★★★★
+        - generic [ref=e287]:
+          - generic [ref=e288]:
+            - generic [ref=e289]: EN
+            - generic [ref=e290]:
+              - paragraph [ref=e291]: Emeka Nwosu
+              - paragraph [ref=e292]: Freelance Web Developer
+              - paragraph [ref=e293]: Web Development
+          - paragraph [ref=e294]: "\"The project-based approach is incredible. I built 4 real websites during the course and now freelance full-time. Best investment I've made in myself.\""
+          - paragraph [ref=e295]: ★★★★★
+        - generic [ref=e296]:
+          - generic [ref=e297]:
+            - generic [ref=e298]: FA
+            - generic [ref=e299]:
+              - paragraph [ref=e300]: Funmi Adeola
+              - paragraph [ref=e301]: Product Manager
+              - paragraph [ref=e302]: AI & Automation
+          - paragraph [ref=e303]: "\"I came in knowing nothing about AI. The instructors made complex topics accessible and I now automate workflows at my company saving hours every week.\""
+          - paragraph [ref=e304]: ★★★★★
+    - generic [ref=e307]:
+      - generic:
+        - img
+      - generic [ref=e308]:
+        - generic [ref=e309]:
+          - paragraph [ref=e310]: Join Our Next Cohort
+          - heading "Digital Courses Now Available for Direct Purchase" [level=2] [ref=e311]
+          - paragraph [ref=e312]: Choose from Data Analytics, Web Development, Mobile, AI, and Machine Learning.
+          - paragraph [ref=e313]: From N180,000 to N600,000
+        - generic [ref=e314]:
+          - generic [ref=e315]: One-time payment with instant download access
+          - link "Enroll via WhatsApp" [ref=e316] [cursor=pointer]:
+            - /url: https://wa.me/2348106258080?text=Hello%20DWBB%20Academy!%20I%20saw%20the%20July%206%20cohort.%20I'd%20like%20to%20secure%20my%20spot%20and%20learn%20about%20the%20early%20bird%20discount.
+    - generic [ref=e318]:
+      - generic [ref=e319]:
+        - paragraph [ref=e320]: Resources
+        - heading "Insights & Resources" [level=2] [ref=e321]
+        - paragraph [ref=e322]: Stay ahead with articles, guides, and career tips from our expert instructors.
+      - generic [ref=e323]:
+        - generic [ref=e324]:
+          - generic [ref=e325]: Data Analytics
+          - paragraph [ref=e328]: 7 min read
+          - paragraph [ref=e329]: June 10, 2026
+          - heading "How to Start a Career in Data Analytics in 2026" [level=3] [ref=e330]
+          - paragraph [ref=e331]: Data analytics is one of the fastest growing career fields globally. Here's your complete roadmap to getting started, even with no prior experience.
+          - link "Read More" [ref=e332] [cursor=pointer]:
+            - /url: /blog/how-to-start-career-in-data-analytics
+            - text: Read More
+            - img [ref=e333]
+        - generic [ref=e335]:
+          - generic [ref=e336]: AI
+          - paragraph [ref=e339]: 5 min read
+          - paragraph [ref=e340]: June 3, 2026
+          - heading "Top 10 AI Tools Every Business Should Be Using in 2026" [level=3] [ref=e341]
+          - paragraph [ref=e342]: From automation to content generation, these AI tools are transforming how modern businesses operate. Here's what you need to know.
+          - link "Read More" [ref=e343] [cursor=pointer]:
+            - /url: /blog/top-ai-tools-for-business-2026
+            - text: Read More
+            - img [ref=e344]
+        - generic [ref=e346]:
+          - generic [ref=e347]: Career Tips
+          - paragraph [ref=e350]: 6 min read
+          - paragraph [ref=e351]: May 28, 2026
+          - 'heading "Web Developer Salaries in Nigeria in 2026: What to Expect" [level=3] [ref=e352]'
+          - paragraph [ref=e353]: The demand for web developers in Nigeria continues to rise. We break down average salaries, top-paying sectors, and how to negotiate your worth.
+          - link "Read More" [ref=e354] [cursor=pointer]:
+            - /url: /blog/web-developer-salary-nigeria-2026
+            - text: Read More
+            - img [ref=e355]
+      - link "Read All Articles" [ref=e358] [cursor=pointer]:
+        - /url: /blog
+  - contentinfo [ref=e359]:
+    - generic [ref=e360]:
+      - generic [ref=e361]:
+        - generic [ref=e362]:
+          - generic [ref=e363]:
+            - img "DWBB Academy logo" [ref=e364]
+            - generic [ref=e365]:
+              - paragraph [ref=e366]: DWBB Academy
+              - paragraph [ref=e367]: Digital career launchpad
+          - paragraph [ref=e368]: Hands-on bootcamps in analytics, development, AI, and emerging digital skills built for ambitious African talent.
+          - generic [ref=e369]:
+            - link "Facebook" [ref=e370] [cursor=pointer]:
+              - /url: https://facebook.com/dwbbacademy
+              - img [ref=e371]
+            - link "Instagram" [ref=e374] [cursor=pointer]:
+              - /url: https://instagram.com/dwbbacademy
+              - img [ref=e375]
+            - link "YouTube" [ref=e378] [cursor=pointer]:
+              - /url: https://youtube.com/@dwbbacademy
+              - img [ref=e379]
+            - link "LinkedIn" [ref=e382] [cursor=pointer]:
+              - /url: https://linkedin.com/company/dwbbacademy
+              - img [ref=e383]
+        - generic [ref=e387]:
+          - paragraph [ref=e388]: Quick Links
+          - generic [ref=e389]:
+            - link "Home" [ref=e390] [cursor=pointer]:
+              - /url: /
+            - link "About" [ref=e391] [cursor=pointer]:
+              - /url: /about
+            - link "Blog" [ref=e392] [cursor=pointer]:
+              - /url: /blog
+            - link "Contact" [ref=e393] [cursor=pointer]:
+              - /url: /contact
+        - generic [ref=e394]:
+          - paragraph [ref=e395]: Courses
+          - generic [ref=e396]:
+            - link "Data Analytics" [ref=e397] [cursor=pointer]:
+              - /url: /courses/data-analytics
+            - link "Web Development" [ref=e398] [cursor=pointer]:
+              - /url: /courses/web-development
+            - link "Mobile App Dev" [ref=e399] [cursor=pointer]:
+              - /url: /courses/mobile-app
+            - link "AI & Automation" [ref=e400] [cursor=pointer]:
+              - /url: /courses/ai-automation
+            - link "Machine Learning" [ref=e401] [cursor=pointer]:
+              - /url: /courses/machine-learning
+        - generic [ref=e402]:
+          - paragraph [ref=e403]: Contact
+          - generic [ref=e404]:
+            - paragraph [ref=e405]: +234 810 625 8080
+            - paragraph [ref=e406]: "@dwbbacademy"
+            - paragraph [ref=e407]: Monday - Friday, 9am - 6pm WAT
+          - link "Chat on WhatsApp" [ref=e408] [cursor=pointer]:
+            - /url: https://wa.me/2348106258080?text=Hello%20DWBB%20Academy!%20I'm%20interested%20in%20learning%20more%20about%20your%20courses.
+      - generic [ref=e409]:
+        - paragraph [ref=e410]: © 2026 DWBB Academy. All rights reserved.
+        - generic [ref=e411]:
+          - generic [ref=e412]: Privacy Policy
+          - generic [ref=e413]: Terms
+  - link "Contact us on WhatsApp" [ref=e414] [cursor=pointer]:
+    - /url: https://wa.me/2348106258080?text=Hello%20DWBB%20Academy!%20I'm%20interested%20in%20learning%20more%20about%20your%20courses.
+    - img [ref=e415]

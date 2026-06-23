@@ -18,6 +18,7 @@ const WebDevelopment = lazy(() => import("@/pages/courses/WebDevelopment"));
 const MobileAppDevelopment = lazy(() => import("@/pages/courses/MobileAppDevelopment"));
 const AIAndAutomation = lazy(() => import("@/pages/courses/AIAndAutomation"));
 const MachineLearning = lazy(() => import("@/pages/courses/MachineLearning"));
+const paymentDebugEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PAYMENT_DEBUG === "true";
 
 const fallback = (
   <div className="flex min-h-screen items-center justify-center bg-deep-blue text-white">
@@ -47,7 +48,7 @@ export default function App() {
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/payment/success" element={<PaymentSuccess />} />
-            <Route path="/payments/console" element={<PaymentConsole />} />
+            {paymentDebugEnabled ? <Route path="/payments/console" element={<PaymentConsole />} /> : null}
           </Route>
         </Routes>
       </Suspense>
