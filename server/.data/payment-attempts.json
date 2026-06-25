@@ -11,5 +11,44 @@
     "phone": "08106258080",
     "appBaseUrl": "http://localhost:5173",
     "createdAt": "2026-06-23T11:32:28.531Z"
+  },
+  {
+    "type": "initialize",
+    "reference": "dwbb-data-analytics-1782215664308-cjw2fs",
+    "accessCode": "teak494lkwmv73h",
+    "courseSlug": "data-analytics",
+    "courseTitle": "Data Analytics Bootcamp",
+    "amount": 25000000,
+    "email": "loftysonix@gmail.com",
+    "name": "Chidera Aniekwe",
+    "phone": "08106258080",
+    "appBaseUrl": "http://localhost:5173",
+    "createdAt": "2026-06-23T11:54:25.152Z"
+  },
+  {
+    "type": "initialize",
+    "reference": "dwbb-mobile-app-1782215785775-yv24sb",
+    "accessCode": "kwlw9920oo2eohq",
+    "courseSlug": "mobile-app",
+    "courseTitle": "Mobile App Development",
+    "amount": 45000000,
+    "email": "loftysonix@gmail.com",
+    "name": "Chidera Aniekwe",
+    "phone": "08106258080",
+    "appBaseUrl": "http://localhost:5173",
+    "createdAt": "2026-06-23T11:56:26.432Z"
+  },
+  {
+    "type": "initialize",
+    "reference": "dwbb-web-development-1782215841880-hlw2rs",
+    "accessCode": "r7svt7o8d5kcplb",
+    "courseSlug": "web-development",
+    "courseTitle": "Web Development Bootcamp",
+    "amount": 35000000,
+    "email": "loftysonix@gmail.com",
+    "name": "Chidera Aniekwe",
+    "phone": "08106258080",
+    "appBaseUrl": "http://localhost:5173",
+    "createdAt": "2026-06-23T11:57:22.565Z"
   }
 ]

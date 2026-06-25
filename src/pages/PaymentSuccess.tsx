@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { clearPaymentSession, getPaymentSession } from "@/lib/payment-session";
 import type { VerificationResponse } from "@/lib/payments";
 
-const paymentDebugEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PAYMENT_DEBUG === "true";
+const paymentDebugEnabled = import.meta.env.VITE_ENABLE_PAYMENT_DEBUG === "true";
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();

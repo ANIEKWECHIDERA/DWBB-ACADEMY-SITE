@@ -17,7 +17,7 @@ const port = Number(process.env.SERVER_PORT || 8787);
 const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
 const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
 const paystackPublicKey = process.env.PAYSTACK_PUBLIC_KEY;
-const enablePaymentDebug = !isProduction || String(process.env.ENABLE_PAYMENT_DEBUG || "false") === "true";
+const enablePaymentDebug = String(process.env.ENABLE_PAYMENT_DEBUG || "false") === "true";
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 const downloadLinkTtlDays = Number(process.env.DOWNLOAD_LINK_TTL_DAYS || 7);
 const trustProxy = process.env.TRUST_PROXY;
