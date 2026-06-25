@@ -50,5 +50,15 @@
     "phone": "08106258080",
     "appBaseUrl": "http://localhost:5173",
     "createdAt": "2026-06-23T11:57:22.565Z"
+  },
+  {
+    "reference": "dwbb-machine-learning-1782398871646-gmkid2",
+    "accessCode": "t2igdo7e80dgzbc",
+    "courseSlug": "machine-learning",
+    "courseTitle": "Machine Learning",
+    "amount": 60000000,
+    "email": "loftysonix@gmail.com",
+    "appBaseUrl": "http://localhost:5173",
+    "createdAt": "2026-06-25T14:47:52.545Z"
   }
 ]
