@@ -137,7 +137,7 @@ export function CoursePageTemplate({ course }: { course: Course }) {
           <Card className="h-fit p-8">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-gold">Pricing & Enrollment</p>
             <p className="mt-4 text-4xl font-bold text-deep-blue">{course.price}</p>
-            <p className="mt-1 text-slate-500">{course.priceUSD}</p>
+            {course.priceUSD ? <p className="mt-1 text-slate-500">{course.priceUSD}</p> : null}
             <div className="mt-6 rounded-3xl bg-brand-gold/15 px-4 py-4 text-sm font-semibold text-slate-800">
               {course.earlyBirdDiscount}
             </div>

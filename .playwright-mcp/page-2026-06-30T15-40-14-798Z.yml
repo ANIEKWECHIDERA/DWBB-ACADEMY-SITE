@@ -1,0 +1,8 @@
+- generic [ref=f11e1]:
+  - generic [ref=f11e10]:
+    - paragraph [ref=f11e11]: DWBB Admin
+    - heading "Secure console access" [level=1] [ref=f11e12]
+    - paragraph [ref=f11e13]: Sign in with Google to access the academy console. The admin workspace stays hidden until Firebase authentication succeeds and your email is approved on the server.
+    - button "Continue with Google" [active] [ref=f11e14] [cursor=pointer]
+  - iframe [ref=f11e15]:
+    

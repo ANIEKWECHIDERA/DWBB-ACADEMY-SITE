@@ -29,7 +29,8 @@ export function CourseCard({ course }: { course: Course }) {
         </div>
       </div>
       <p className="mt-5 text-lg font-semibold text-deep-blue">
-        {course.price} <span className="text-sm font-normal text-slate-500">| {course.priceUSD}</span>
+        {course.price}
+        {course.priceUSD ? <span className="text-sm font-normal text-slate-500"> | {course.priceUSD}</span> : null}
       </p>
       <div className="mt-6 flex flex-wrap gap-3">
         <Button asChild variant="ghost" className="rounded-full border border-slate-200">

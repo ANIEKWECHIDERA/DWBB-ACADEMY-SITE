@@ -5,13 +5,14 @@ import { CourseCard } from "@/components/shared/CourseCard";
 import { SectionHeader } from "@/components/shared/SectionHeader";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
-import { courses } from "@/data/courses";
+import { usePublicCourses } from "@/lib/public-courses";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 const filters = ["All", "Technology", "Data", "Business"] as const;
 
 export default function CoursesIndex() {
   const [active, setActive] = useState<(typeof filters)[number]>("All");
+  const { courses } = usePublicCourses();
 
   const filteredCourses = useMemo(() => {
     if (active === "All") {
@@ -57,7 +58,7 @@ export default function CoursesIndex() {
         </div>
       </section>
 
-      <DigitalCourseStoreSection />
+      <DigitalCourseStoreSection courses={courses} />
     </>
   );
 }

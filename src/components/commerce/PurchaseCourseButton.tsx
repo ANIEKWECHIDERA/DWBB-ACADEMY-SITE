@@ -150,7 +150,7 @@ export function PurchaseCourseButton({
                         </span>
                       </div>
                     </div>
-                    <p className="mt-2 text-sm text-slate-500">{course.priceUSD} course value before processing</p>
+                    {course.priceUSD ? <p className="mt-2 text-sm text-slate-500">{course.priceUSD} course value before processing</p> : null}
                     <p className="mt-5 text-sm font-semibold text-slate-950">What you get immediately:</p>
                     <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-600">
                       {course.digitalDeliverables.map((item) => (

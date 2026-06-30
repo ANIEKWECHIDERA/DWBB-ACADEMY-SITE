@@ -7,7 +7,30 @@ import dotenv from "dotenv";
 import express from "express";
 import nodemailer from "nodemailer";
 
+import {
+  deleteManagedCourse,
+  deleteCustomersByEmail,
+  deleteTransactionsByReference,
+  ensureManagedCoursesSeeded,
+  getAdminUserByEmail,
+  getDashboardMetrics,
+  getManagedCourse,
+  listAdminUsers,
+  listAuditLogs,
+  listCustomers,
+  listLoginLogs,
+  listManagedCourses,
+  listTransactions,
+  mirrorVerifiedPurchase,
+  normalizeEmail,
+  recordAdminLogin,
+  recordAuditLog,
+  reorderManagedCourses,
+  updateManagedCourse,
+  upsertAdminUser,
+} from "./admin-store.mjs";
 import { digitalCourseCatalog, findDigitalCourse } from "./course-catalog.mjs";
+import { getFirebaseAdminAuth, isFirebaseAdminConfigured } from "./firebase-admin.mjs";
 import { getCheckoutPricing } from "../src/lib/paystackPricing.js";
 
 dotenv.config();
@@ -73,9 +96,11 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/store/courses", (_req, res) => {
+app.get("/api/store/courses", async (_req, res) => {
+  const managedCourses = await loadManagedCoursesForPublic();
+
   res.json({
-    courses: digitalCourseCatalog.map((course) => {
+    courses: managedCourses.map((course) => {
       const checkoutPricing = getCheckoutPricing(course.priceNaira);
 
       return {
@@ -83,14 +108,221 @@ app.get("/api/store/courses", (_req, res) => {
         checkoutPriceNaira: checkoutPricing.totalChargeNaira,
         processingFee: formatNaira(checkoutPricing.processingFeeNaira),
         processingFeeNaira: checkoutPricing.processingFeeNaira,
+        templateSlug: course.templateSlug || course.slug,
         slug: course.slug,
+        shortTitle: course.shortTitle || "",
         title: course.title,
+        summary: course.summary || "",
+        longDescription: course.longDescription || "",
+        deliverables: course.deliverables || [],
+        published: course.published !== false,
+        featured: course.featured !== false,
+        order: Number(course.order || 0),
         priceNaira: course.priceNaira,
         price: formatNaira(course.priceNaira),
-        deliverables: course.deliverables,
       };
     }),
   });
+});
+
+app.get("/api/admin/session", requireAdminAuth(), async (req, res) => {
+  const { adminUser } = req;
+
+  if (isFirebaseAdminConfigured()) {
+    await ensureManagedCoursesSeeded();
+  }
+
+  await recordAdminLoginSafe(adminUser);
+  await recordAuditLogSafe({
+    actorEmail: adminUser.email,
+    actorRole: adminUser.role,
+    action: "admin.session.viewed",
+    entityType: "session",
+    entityId: adminUser.email,
+    metadata: { uid: adminUser.uid },
+  });
+
+  res.json({
+    user: adminUser,
+    permissions: {
+      canManageCourses: true,
+      canViewCustomers: adminUser.role === "super_admin",
+      canViewTransactions: adminUser.role === "super_admin",
+      canViewAuditLogs: adminUser.role === "super_admin",
+      canManageAdmins: adminUser.role === "super_admin",
+    },
+    mode: getPaystackMode(),
+    firebaseEnabled: isFirebaseAdminConfigured(),
+  });
+});
+
+app.get("/api/admin/dashboard", requireAdminAuth(), async (req, res) => {
+  const range = parseDashboardRange(req.query.range);
+  const metrics = await getDashboardMetrics(range);
+  res.json({
+    mode: getPaystackMode(),
+    range,
+    metrics,
+  });
+});
+
+app.get("/api/admin/courses", requireAdminAuth(), async (_req, res) => {
+  const courses = await listManagedCoursesSafe();
+  res.json({ courses });
+});
+
+app.put("/api/admin/courses/:slug", requireAdminAuth(), async (req, res) => {
+  const slug = req.params.slug;
+  const updates = sanitizeCourseUpdates(req.body ?? {});
+  const course = await updateManagedCourse(slug, updates, req.adminUser);
+
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "course.updated",
+    entityType: "course",
+    entityId: slug,
+    metadata: { fields: Object.keys(updates) },
+  });
+
+  res.json({ course });
+});
+
+app.post("/api/admin/courses/reorder", requireAdminAuth(), async (req, res) => {
+  const slugs = Array.isArray(req.body?.slugs) ? req.body.slugs.filter(Boolean) : [];
+
+  if (slugs.length === 0) {
+    return res.status(400).json({ error: "Course order is required." });
+  }
+
+  const courses = await reorderManagedCourses(slugs, req.adminUser);
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "course.reordered",
+    entityType: "course",
+    entityId: "catalog",
+    metadata: { slugs },
+  });
+
+  res.json({ courses });
+});
+
+app.delete("/api/admin/courses/:slug", requireAdminAuth(), async (req, res) => {
+  const slug = req.params.slug;
+  await deleteManagedCourse(slug);
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "course.deleted",
+    entityType: "course",
+    entityId: slug,
+    metadata: {},
+  });
+  res.status(204).end();
+});
+
+app.get("/api/admin/transactions", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
+  const range = parseDashboardRange(req.query.range);
+  const transactions = await listTransactions(range);
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "transactions.viewed",
+    entityType: "transaction",
+    entityId: "collection",
+    metadata: { range },
+  });
+  res.json({ transactions });
+});
+
+app.delete("/api/admin/transactions", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
+  const references = Array.isArray(req.body?.references) ? req.body.references.filter(Boolean) : [];
+
+  if (references.length === 0) {
+    return res.status(400).json({ error: "At least one transaction reference is required." });
+  }
+
+  await deleteTransactionsByReference(references);
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "transactions.deleted",
+    entityType: "transaction",
+    entityId: "collection",
+    metadata: { references },
+  });
+  res.status(204).end();
+});
+
+app.get("/api/admin/customers", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
+  const range = parseDashboardRange(req.query.range);
+  const customers = await listCustomers(range);
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "customers.viewed",
+    entityType: "customer",
+    entityId: "collection",
+    metadata: { range },
+  });
+  res.json({ customers });
+});
+
+app.delete("/api/admin/customers", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
+  const emails = Array.isArray(req.body?.emails) ? req.body.emails.filter(Boolean) : [];
+
+  if (emails.length === 0) {
+    return res.status(400).json({ error: "At least one customer email is required." });
+  }
+
+  await deleteCustomersByEmail(emails);
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "customers.deleted",
+    entityType: "customer",
+    entityId: "collection",
+    metadata: { emails },
+  });
+  res.status(204).end();
+});
+
+app.get("/api/admin/audit-logs", requireAdminAuth({ superAdminOnly: true }), async (_req, res) => {
+  const [auditLogs, loginLogs] = await Promise.all([listAuditLogsSafe(), listLoginLogsSafe()]);
+  res.json({ auditLogs, loginLogs });
+});
+
+app.get("/api/admin/users", requireAdminAuth({ superAdminOnly: true }), async (_req, res) => {
+  const users = await listAdminUsersSafe();
+  res.json({ users });
+});
+
+app.put("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
+  const email = req.params.email;
+  const role = req.body?.role;
+
+  if (role !== "admin" && role !== "super_admin") {
+    return res.status(400).json({ error: "A valid role is required." });
+  }
+
+  const user = await upsertAdminUser({
+    email,
+    role,
+    invitedBy: req.adminUser.email,
+    active: req.body?.active !== false,
+  });
+
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "admin.role.updated",
+    entityType: "admin_user",
+    entityId: normalizeEmail(email),
+    metadata: { role, active: req.body?.active !== false },
+  });
+
+  res.json({ user });
 });
 
 app.get("/api/payments/debug/attempts", requirePaymentDebug, async (_req, res) => {
@@ -108,7 +340,7 @@ app.post("/api/payments/initialize", initializeRateLimit, async (req, res) => {
     ensurePaystackConfigured();
 
     const { courseSlug, name, email, phone } = req.body ?? {};
-    const course = findDigitalCourse(courseSlug);
+    const course = await getCourseForCheckout(courseSlug);
     const publicAppBaseUrl = getPublicAppBaseUrl(req);
     const checkoutPricing = course ? getCheckoutPricing(course.priceNaira) : null;
 
@@ -276,7 +508,7 @@ async function verifyAndFulfill(reference) {
   const customerName = transaction.metadata?.customerName || transaction.customer?.first_name || "Customer";
   const customerPhone = transaction.metadata?.customerPhone || "";
   const publicAppBaseUrl = normalizeAppBaseUrl(transaction.metadata?.appBaseUrl || appBaseUrl);
-  const course = findDigitalCourse(courseSlug);
+  const course = await getCourseForCheckout(courseSlug);
 
   if (!course) {
     throw new Error("Purchased course could not be identified.");
@@ -331,6 +563,7 @@ async function verifyAndFulfill(reference) {
 
   purchases.push(purchase);
   await writePurchases(purchases);
+  await mirrorPurchaseSafe({ purchase, transaction, course });
 
   let emailMessage = `Payment verified. Download access is ready for ${downloadLinkTtlDays} days.`;
 
@@ -376,6 +609,52 @@ function securityHeadersMiddleware(_req, res, next) {
   next();
 }
 
+function requireAdminAuth(options = {}) {
+  return async (req, res, next) => {
+    try {
+      const authHeader = req.headers.authorization || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+
+      if (!token) {
+        return res.status(401).json({ error: "Authentication required." });
+      }
+
+      const auth = getFirebaseAdminAuth();
+      if (!auth) {
+        return res.status(503).json({ error: "Admin authentication is not configured." });
+      }
+
+      const decodedToken = await auth.verifyIdToken(token, true);
+      const email = normalizeEmail(decodedToken.email);
+
+      if (!email) {
+        return res.status(403).json({ error: "A verified email is required." });
+      }
+
+      const adminUser = await resolveAdminUser(email, decodedToken.uid);
+      if (!adminUser || adminUser.active === false) {
+        return res.status(403).json({ error: "You do not have access to this console." });
+      }
+
+      if (options.superAdminOnly && adminUser.role !== "super_admin") {
+        return res.status(403).json({ error: "Super admin access is required." });
+      }
+
+      req.adminUser = {
+        uid: decodedToken.uid,
+        email,
+        role: adminUser.role,
+        active: adminUser.active !== false,
+      };
+
+      next();
+    } catch (error) {
+      logServerError("Admin authentication failed", error);
+      res.status(401).json({ error: "Unable to authenticate this admin session." });
+    }
+  };
+}
+
 function requirePaymentDebug(_req, res, next) {
   if (!enablePaymentDebug) {
     return res.status(404).json({ error: "Not found." });
@@ -417,6 +696,14 @@ function parseAllowedOrigins(value) {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+}
+
+function parseDashboardRange(value) {
+  if (value === "today" || value === "7d" || value === "30d" || value === "all") {
+    return value;
+  }
+
+  return "30d";
 }
 
 function isAllowedOrigin(origin) {
@@ -461,6 +748,182 @@ function getPublicAppBaseUrl(req) {
 
 function normalizeAppBaseUrl(value) {
   return String(value || appBaseUrl).replace(/\/+$/, "");
+}
+
+function getSuperAdminEmails() {
+  return String(process.env.SUPER_ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => normalizeEmail(email))
+    .filter(Boolean);
+}
+
+async function resolveAdminUser(email, uid) {
+  const superAdminEmails = getSuperAdminEmails();
+
+  if (superAdminEmails.includes(email)) {
+    if (isFirebaseAdminConfigured()) {
+      await upsertAdminUser({
+        email,
+        role: "super_admin",
+        invitedBy: email,
+        active: true,
+      });
+    }
+
+    return {
+      email,
+      uid,
+      role: "super_admin",
+      active: true,
+    };
+  }
+
+  if (!isFirebaseAdminConfigured()) {
+    return null;
+  }
+
+  return getAdminUserByEmail(email);
+}
+
+async function loadManagedCoursesForPublic() {
+  try {
+    return await listManagedCoursesSafe();
+  } catch {
+    return digitalCourseCatalog.map((course, index) => ({
+      ...course,
+      summary: "",
+      longDescription: "",
+      featured: true,
+      published: true,
+      order: index,
+    }));
+  }
+}
+
+async function getCourseForCheckout(slug) {
+  if (isFirebaseAdminConfigured()) {
+    try {
+      const managedCourse = await getManagedCourse(slug);
+      if (managedCourse) {
+        return managedCourse;
+      }
+    } catch (error) {
+      logServerError("Managed course lookup failed", error);
+    }
+  }
+
+  return findDigitalCourse(slug);
+}
+
+function sanitizeCourseUpdates(payload) {
+  const updates = {};
+
+  if (typeof payload.slug === "string" && payload.slug.trim()) {
+    updates.slug = payload.slug.trim();
+  }
+  if (typeof payload.title === "string") {
+    updates.title = payload.title.trim();
+  }
+  if (typeof payload.shortTitle === "string") {
+    updates.shortTitle = payload.shortTitle.trim();
+  }
+  if (typeof payload.summary === "string") {
+    updates.summary = payload.summary;
+  }
+  if (typeof payload.longDescription === "string") {
+    updates.longDescription = payload.longDescription;
+  }
+  if (typeof payload.priceNaira === "number") {
+    updates.priceNaira = Math.max(Math.round(payload.priceNaira), 0);
+  }
+  if (Array.isArray(payload.deliverables)) {
+    updates.deliverables = payload.deliverables.map((item) => String(item)).filter(Boolean);
+  }
+  if (typeof payload.published === "boolean") {
+    updates.published = payload.published;
+  }
+  if (typeof payload.featured === "boolean") {
+    updates.featured = payload.featured;
+  }
+  if (Array.isArray(payload.assets)) {
+    updates.assets = payload.assets;
+  }
+  if (typeof payload.order === "number") {
+    updates.order = payload.order;
+  }
+
+  return updates;
+}
+
+function getPaystackMode() {
+  return String(paystackPublicKey || "").startsWith("pk_live_") ? "live" : "test";
+}
+
+async function listManagedCoursesSafe() {
+  if (!isFirebaseAdminConfigured()) {
+    return digitalCourseCatalog.map((course, index) => ({
+      ...course,
+      summary: "",
+      longDescription: "",
+      featured: true,
+      published: true,
+      order: index,
+    }));
+  }
+
+  return listManagedCourses();
+}
+
+async function recordAdminLoginSafe(adminUser) {
+  if (!isFirebaseAdminConfigured()) {
+    return;
+  }
+
+  await recordAdminLogin(adminUser);
+}
+
+async function recordAuditLogSafe(payload) {
+  if (!isFirebaseAdminConfigured()) {
+    return;
+  }
+
+  await recordAuditLog(payload);
+}
+
+async function listAuditLogsSafe() {
+  if (!isFirebaseAdminConfigured()) {
+    return [];
+  }
+
+  return listAuditLogs();
+}
+
+async function listLoginLogsSafe() {
+  if (!isFirebaseAdminConfigured()) {
+    return [];
+  }
+
+  return listLoginLogs();
+}
+
+async function listAdminUsersSafe() {
+  if (!isFirebaseAdminConfigured()) {
+    return [];
+  }
+
+  return listAdminUsers();
+}
+
+async function mirrorPurchaseSafe(payload) {
+  if (!isFirebaseAdminConfigured()) {
+    return;
+  }
+
+  try {
+    await mirrorVerifiedPurchase(payload);
+  } catch (error) {
+    logServerError("Firestore purchase mirror failed", error);
+  }
 }
 
 function createDownloadExpiry() {

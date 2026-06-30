@@ -14,6 +14,7 @@ export type CourseColor = "coral" | "sky" | "green" | "gold";
 export interface Course {
   id: string;
   slug: string;
+  templateSlug?: string;
   title: string;
   shortTitle: string;
   tagline: string;
@@ -26,8 +27,12 @@ export interface Course {
   price: string;
   priceUSD: string;
   earlyBirdDiscount: string;
+  featured?: boolean;
   color: CourseColor;
   icon: string;
+  order?: number;
+  processingFeeNaira?: number;
+  published?: boolean;
   digitalDeliverables: string[];
   outcomes: string[];
   curriculum: CourseModule[];

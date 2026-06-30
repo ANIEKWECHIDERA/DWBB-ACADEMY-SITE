@@ -6,14 +6,17 @@ import { HowItWorksSection } from "@/components/sections/home/HowItWorksSection"
 import { TestimonialsSection } from "@/components/sections/home/TestimonialsSection";
 import { TrustedBySection } from "@/components/sections/home/TrustedBySection";
 import { WhyDWBBSection } from "@/components/sections/home/WhyDWBBSection";
+import { usePublicCourses } from "@/lib/public-courses";
 
 export default function Home() {
+  const { courses } = usePublicCourses();
+
   return (
     <>
       <HeroSection />
       <TrustedBySection />
       <WhyDWBBSection />
-      <FeaturedCoursesSection />
+      <FeaturedCoursesSection courses={courses} />
       <HowItWorksSection />
       <TestimonialsSection />
       <BootcampBannerSection />

@@ -1,9 +1,9 @@
 import { Card } from "@/components/ui/card";
 import { SectionHeader } from "@/components/shared/SectionHeader";
 import { PurchaseCourseButton } from "@/components/commerce/PurchaseCourseButton";
-import { courses } from "@/data/courses";
+import type { Course } from "@/types/course";
 
-export function DigitalCourseStoreSection() {
+export function DigitalCourseStoreSection({ courses }: { courses: Course[] }) {
   return (
     <section className="bg-white py-20" id="digital-course-store">
       <div className="container-shell">
@@ -22,7 +22,7 @@ export function DigitalCourseStoreSection() {
               <h3 className="mt-6 text-2xl font-bold text-slate-950">{course.shortTitle}</h3>
               <p className="mt-3 text-sm leading-7 text-slate-600">{course.tagline}</p>
               <p className="mt-5 text-3xl font-bold text-deep-blue">{course.price}</p>
-              <p className="mt-1 text-sm text-slate-500">{course.priceUSD}</p>
+              {course.priceUSD ? <p className="mt-1 text-sm text-slate-500">{course.priceUSD}</p> : null}
               <ul className="mt-5 flex-1 space-y-2 text-sm leading-7 text-slate-600">
                 {course.digitalDeliverables.map((item) => (
                   <li key={item}>• {item}</li>

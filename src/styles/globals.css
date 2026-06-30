@@ -46,11 +46,19 @@
 
   html {
     scroll-behavior: smooth;
+    scrollbar-width: none;
   }
 
   body {
     @apply bg-background font-body text-foreground antialiased;
     margin: 0;
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    display: none;
   }
 
   #root {
