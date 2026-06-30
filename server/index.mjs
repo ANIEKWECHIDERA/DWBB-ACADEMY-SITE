@@ -289,12 +289,7 @@ async function verifyAndFulfill(reference) {
 
   const downloadToken = crypto.randomBytes(24).toString("hex");
   const expiresAt = createDownloadExpiry().toISOString();
-  const emailResult = await sendConfirmationEmail({
-    courseTitle: course.title,
-    customerName,
-    email: transaction.customer?.email,
-    downloadUrl: `${publicAppBaseUrl}/api/download/${downloadToken}`,
-  });
+  const downloadUrl = `${publicAppBaseUrl}/api/download/${downloadToken}`;
 
   const purchase = {
     reference,
@@ -307,20 +302,45 @@ async function verifyAndFulfill(reference) {
     paidAt: new Date().toISOString(),
     downloadToken,
     expiresAt,
-    emailPreviewUrl: emailResult.previewUrl || null,
+    emailDeliveryStatus: transaction.customer?.email ? "pending" : "skipped",
+    emailPreviewUrl: null,
   };
 
   purchases.push(purchase);
   await writePurchases(purchases);
 
+  let emailMessage = `Payment verified. Download access is ready for ${downloadLinkTtlDays} days.`;
+
+  if (transaction.customer?.email) {
+    try {
+      const emailResult = await sendConfirmationEmail({
+        courseTitle: course.title,
+        customerName,
+        email: transaction.customer?.email,
+        downloadUrl,
+      });
+
+      purchase.emailPreviewUrl = emailResult.previewUrl || null;
+      purchase.emailDeliveryStatus = "sent";
+      await writePurchases(purchases);
+
+      emailMessage = emailResult.previewUrl
+        ? `${emailMessage} A preview email was generated for testing.`
+        : `${emailMessage} A confirmation email has been sent.`;
+    } catch (error) {
+      purchase.emailDeliveryStatus = "failed";
+      await writePurchases(purchases);
+      logServerError(`Confirmation email failed for ${reference}`, error);
+      emailMessage = `${emailMessage} Your materials are available now, but the confirmation email could not be sent automatically.`;
+    }
+  }
+
   return {
     success: true,
     courseTitle: course.title,
-    emailPreviewUrl: emailResult.previewUrl || null,
-    downloadUrl: `${publicAppBaseUrl}/api/download/${downloadToken}`,
-    message: emailResult.previewUrl
-      ? `Payment verified. Download access is ready for ${downloadLinkTtlDays} days and a preview email was generated for testing.`
-      : `Payment verified. Download access is ready for ${downloadLinkTtlDays} days and a confirmation email has been sent.`,
+    emailPreviewUrl: purchase.emailPreviewUrl,
+    downloadUrl,
+    message: emailMessage,
   };
 }
 
@@ -556,7 +576,15 @@ function formatNaira(amount) {
 }
 
 function logServerError(context, error) {
-  console.error(`${context}:`, error instanceof Error ? error.message : error);
+  if (error instanceof Error) {
+    console.error(`${context}: ${error.message}`);
+    if (error.stack) {
+      console.error(error.stack);
+    }
+    return;
+  }
+
+  console.error(`${context}:`, error);
 }
 
 async function ensureJsonArrayFile(filePath) {
