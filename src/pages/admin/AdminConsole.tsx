@@ -12,27 +12,66 @@ import {
 } from "recharts";
 import {
   Activity,
+  Bell,
   BarChart3,
   BookCopy,
+  CheckCheck,
+  ChevronRight,
   ClipboardList,
   CreditCard,
   LayoutGrid,
-  LoaderCircle,
   LogOut,
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
   ShieldCheck,
   Trash2,
   Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type HTMLAttributes, type ReactNode } from "react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupAction,
+  SidebarGroupContent,
+  SidebarGroupHeader,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
@@ -40,13 +79,17 @@ import {
   deleteAdminCourse,
   deleteAdminCustomers,
   deleteAdminTransactions,
+  dismissAdminNotification,
   getAdminCourses,
   getAdminCustomers,
   getAdminDashboard,
   getAdminLogs,
+  getAdminNotifications,
   getAdminSession,
   getAdminTransactions,
   getAdminUsers,
+  markAdminNotification,
+  markAllAdminNotificationsRead,
   reorderAdminCourses,
   updateAdminCourse,
   updateAdminUser,
@@ -59,6 +102,7 @@ import type {
   AdminCustomer,
   AdminDashboardMetrics,
   AdminDirectoryUser,
+  AdminNotification,
   AdminSession,
   AdminTransaction,
   AuditLogItem,
@@ -66,7 +110,7 @@ import type {
   ManagedCourse,
 } from "@/types/admin";
 
-type AdminSection = "overview" | "courses" | "transactions" | "customers" | "logs" | "admins";
+type AdminSection = "overview" | "courses" | "notifications" | "transactions" | "customers" | "logs" | "admins";
 
 const ranges: Array<{ label: string; value: AdminRange }> = [
   { label: "Today", value: "today" },
@@ -74,6 +118,8 @@ const ranges: Array<{ label: string; value: AdminRange }> = [
   { label: "30 Days", value: "30d" },
   { label: "All Time", value: "all" },
 ];
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function formatCurrencyFromKobo(value: number) {
   return new Intl.NumberFormat("en-NG", {
@@ -97,6 +143,47 @@ function formatDate(value?: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatRelativeTime(value?: string) {
+  if (!value) return "Just now";
+  const target = new Date(value).getTime();
+  const diffMs = target - Date.now();
+  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+  const minutes = Math.round(diffMs / (60 * 1000));
+  if (Math.abs(minutes) < 60) return formatter.format(minutes, "minute");
+
+  const hours = Math.round(diffMs / (60 * 60 * 1000));
+  if (Math.abs(hours) < 24) return formatter.format(hours, "hour");
+
+  const days = Math.round(diffMs / (24 * 60 * 60 * 1000));
+  return formatter.format(days, "day");
+}
+
+function getInitials(value: string) {
+  const parts = String(value || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (parts.length > 0) {
+    return parts.map((part) => part[0]?.toUpperCase() || "").join("");
+  }
+
+  return "DW";
+}
+
+function cloneCourseDraft(course: ManagedCourse | null) {
+  return course ? { ...course, deliverables: [...course.deliverables] } : null;
+}
+
+function sourceCourseSlug(currentSlug: string, sourceCourses: ManagedCourse[]) {
+  if (currentSlug && sourceCourses.some((course) => course.slug === currentSlug)) {
+    return currentSlug;
+  }
+
+  return sourceCourses[0]?.slug || "";
 }
 
 function statusTone(status: string) {
@@ -131,7 +218,7 @@ function SortableCourseRow({
         transition,
       }}
       className={cn(
-        "flex w-full items-center justify-between rounded-3xl border px-4 py-4 text-left transition",
+        "flex w-full items-center justify-between rounded-xl border px-4 py-4 text-left transition",
         active ? "border-brand-gold bg-brand-gold/10" : "border-slate-200 bg-white hover:border-slate-300",
       )}
       onClick={onSelect}
@@ -169,13 +256,20 @@ export default function AdminConsole() {
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loginLogs, setLoginLogs] = useState<LoginLogItem[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminDirectoryUser[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "super_admin">("admin");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const selectedCourseSlugRef = useRef(selectedCourseSlug);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  useEffect(() => {
+    selectedCourseSlugRef.current = selectedCourseSlug;
+  }, [selectedCourseSlug]);
 
   useEffect(() => {
     return onAuthStateChanged(firebaseAuth, async (user) => {
@@ -218,9 +312,16 @@ export default function AdminConsole() {
 
         if (!active) return;
 
+        const nextSlug = sourceCourseSlug(selectedCourseSlugRef.current, courseResult);
+
         setDashboard(dashboardResult.metrics);
         setCourses(courseResult);
-        setSelectedCourseSlug((current) => current || courseResult[0]?.slug || "");
+        setSelectedCourseSlug(nextSlug);
+        setCourseDraft(cloneCourseDraft(courseResult.find((course) => course.slug === nextSlug) || null));
+
+        const notificationResult = await getAdminNotifications(currentUser);
+        if (!active) return;
+        setNotifications(notificationResult.notifications);
 
         if (currentSession.permissions.canViewTransactions || currentSession.permissions.canViewCustomers) {
           const [transactionResult, customerResult] = await Promise.all([
@@ -269,22 +370,13 @@ export default function AdminConsole() {
     };
   }, [firebaseUser, pushToast, range, session]);
 
-  useEffect(() => {
-    if (!selectedCourseSlug) {
-      setCourseDraft(null);
-      return;
-    }
-
-    const selected = courses.find((course) => course.slug === selectedCourseSlug) || null;
-    setCourseDraft(selected ? { ...selected, deliverables: [...selected.deliverables] } : null);
-  }, [courses, selectedCourseSlug]);
-
   const visibleSections = useMemo(() => {
     if (!session) return [];
 
     return [
       { id: "overview", label: "Overview", icon: LayoutGrid, visible: true },
       { id: "courses", label: "Courses", icon: BookCopy, visible: session.permissions.canManageCourses },
+      { id: "notifications", label: "Notifications", icon: Bell, visible: true },
       { id: "transactions", label: "Transactions", icon: CreditCard, visible: session.permissions.canViewTransactions },
       { id: "customers", label: "Customers", icon: Users, visible: session.permissions.canViewCustomers },
       { id: "logs", label: "Audit Logs", icon: ClipboardList, visible: session.permissions.canViewAuditLogs },
@@ -294,6 +386,19 @@ export default function AdminConsole() {
 
   const pricingPreview = courseDraft ? getCheckoutPricing(courseDraft.priceNaira) : null;
   const shouldShowRangeFilter = activeSection === "overview" || activeSection === "transactions" || activeSection === "logs";
+  const inviteEmailValid = emailPattern.test(inviteEmail.trim());
+  const directSections = visibleSections.filter((section) => section.id === "overview" || section.id === "courses");
+  const commerceSections = visibleSections.filter((section) =>
+    section.id === "notifications" || section.id === "transactions" || section.id === "customers",
+  );
+  const governanceSections = visibleSections.filter((section) => section.id === "logs" || section.id === "admins");
+  const unreadNotifications = notifications.filter((item) => !item.readAt).length;
+
+  function selectCourse(slug: string, sourceCourses = courses) {
+    setSelectedCourseSlug(slug);
+    const selected = sourceCourses.find((course) => course.slug === slug) || null;
+    setCourseDraft(cloneCourseDraft(selected));
+  }
 
   async function handleGoogleSignIn() {
     try {
@@ -314,8 +419,9 @@ export default function AdminConsole() {
         ...courseDraft,
         deliverables: courseDraft.deliverables.filter(Boolean),
       });
-      setCourses((current) => current.map((item) => (item.slug === selectedCourseSlug ? course : item)));
-      setSelectedCourseSlug(course.slug);
+      const nextCourses = courses.map((item) => (item.slug === selectedCourseSlug ? course : item));
+      setCourses(nextCourses);
+      selectCourse(course.slug, nextCourses);
       pushToast({ title: "Course saved", description: `${course.title} was updated successfully.` });
     } catch (error) {
       pushToast({
@@ -333,7 +439,7 @@ export default function AdminConsole() {
       await deleteAdminCourse(firebaseUser, courseDraft.slug);
       const nextCourses = courses.filter((course) => course.slug !== courseDraft.slug);
       setCourses(nextCourses);
-      setSelectedCourseSlug(nextCourses[0]?.slug || "");
+      selectCourse(nextCourses[0]?.slug || "", nextCourses);
       pushToast({ title: "Course deleted", description: `${courseDraft.title} was removed from the managed catalog.` });
     } catch (error) {
       pushToast({
@@ -423,6 +529,52 @@ export default function AdminConsole() {
     }
   }
 
+  async function handleNotificationStatus(notificationId: string, status: "read" | "unread") {
+    if (!firebaseUser) return;
+
+    try {
+      const payload = await markAdminNotification(firebaseUser, notificationId, status);
+      const nextNotification = payload.notification;
+
+      setNotifications((current) =>
+        current.map((item) => (item.id === notificationId && nextNotification ? nextNotification : item)),
+      );
+    } catch (error) {
+      pushToast({
+        title: "Notification update failed",
+        description: error instanceof Error ? error.message : "Unable to update this notification right now.",
+      });
+    }
+  }
+
+  async function handleDismissNotification(notificationId: string) {
+    if (!firebaseUser) return;
+
+    try {
+      await dismissAdminNotification(firebaseUser, notificationId);
+      setNotifications((current) => current.filter((item) => item.id !== notificationId));
+    } catch (error) {
+      pushToast({
+        title: "Dismiss failed",
+        description: error instanceof Error ? error.message : "Unable to dismiss this notification right now.",
+      });
+    }
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    if (!firebaseUser || unreadNotifications === 0) return;
+
+    try {
+      await markAllAdminNotificationsRead(firebaseUser);
+      setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+    } catch (error) {
+      pushToast({
+        title: "Update failed",
+        description: error instanceof Error ? error.message : "Unable to mark all notifications as read.",
+      });
+    }
+  }
+
   async function handleLogout() {
     await signOut(firebaseAuth);
   }
@@ -431,7 +583,7 @@ export default function AdminConsole() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
         <div className="flex items-center gap-3">
-          <LoaderCircle className="h-5 w-5 animate-spin" />
+          <Spinner className="border-white border-r-transparent" />
           <span>Preparing admin console...</span>
         </div>
       </div>
@@ -442,7 +594,7 @@ export default function AdminConsole() {
     return (
       <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(255,201,76,0.2),_transparent_40%),linear-gradient(180deg,_#081529_0%,_#0d223f_100%)] px-4 py-10 text-white">
         <div className="mx-auto flex min-h-[80vh] max-w-5xl items-center justify-center">
-          <Card className="w-full max-w-xl border-white/10 bg-white/95 p-8 text-slate-950 shadow-2xl sm:p-10">
+          <AdminPanel className="w-full max-w-xl border-white/10 bg-white/95 p-8 text-slate-950 sm:p-10">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-gold">DWBB Admin</p>
             <h1 className="mt-4 text-4xl font-bold text-slate-950">Secure console access</h1>
             <p className="mt-4 text-base leading-8 text-slate-600">
@@ -450,64 +602,207 @@ export default function AdminConsole() {
               succeeds and your email is approved on the server.
             </p>
             {authorizationError ? (
-              <div className="mt-6 rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{authorizationError}</div>
+              <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{authorizationError}</div>
             ) : null}
-            <Button className="mt-8 w-full" onClick={handleGoogleSignIn} variant="gold">
+            <AdminButton className="mt-8 w-full" onClick={handleGoogleSignIn} variant="gold">
               Continue with Google
-            </Button>
-          </Card>
+            </AdminButton>
+          </AdminPanel>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-slate-100">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col md:flex-row">
-        <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/95 p-6 md:flex md:flex-col">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-gold">DWBB Academy</p>
-            <h1 className="mt-3 text-2xl font-bold text-slate-950">Admin Console</h1>
-            <p className="mt-2 text-sm leading-7 text-slate-500">Courses, inflows, team access, and payment intelligence in one place.</p>
-          </div>
-
-          <nav className="mt-8 space-y-2">
-            {visibleSections.map((section) => {
-              const Icon = section.icon;
-              return (
-                <button
-                  key={section.id}
-                  type="button"
-                  onClick={() => setActiveSection(section.id)}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition",
-                    activeSection === section.id ? "bg-deep-blue text-white" : "text-slate-600 hover:bg-slate-100",
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {section.label}
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="mt-auto rounded-3xl border border-slate-200 bg-slate-50 p-4">
-            <p className="font-semibold text-slate-950">{session.user.email}</p>
-            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">{session.user.role.replace("_", " ")}</p>
-            <div className="mt-4 flex items-center gap-2">
-              <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", session.mode === "live" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
-                {session.mode.toUpperCase()} MODE
-              </span>
+    <SidebarProvider className="overflow-x-hidden bg-slate-100" onOpenChange={setSidebarOpen} open={sidebarOpen}>
+      <div className="mx-auto flex min-h-screen max-w-[1600px]">
+        <Sidebar className="hidden md:flex">
+          <SidebarHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div className={cn("min-w-0", !sidebarOpen && "hidden")}>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-gold">DWBB Academy</p>
+                <h1 className="mt-3 text-2xl font-bold text-slate-950">Admin Console</h1>
+                <p className="mt-2 text-sm leading-7 text-slate-500">Courses, inflows, team access, and payment intelligence in one place.</p>
+              </div>
+              <SidebarTrigger className={cn("h-10 w-10 px-0", sidebarOpen ? "shrink-0" : "mx-auto")}>
+                {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                <span className="sr-only">{sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}</span>
+              </SidebarTrigger>
             </div>
-            <Button className="mt-4 w-full" onClick={handleLogout} variant="ghost">
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Button>
-          </div>
-        </aside>
+          </SidebarHeader>
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 rounded-[32px] bg-white p-6 shadow-soft">
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupHeader>
+                <SidebarGroupLabel>Main</SidebarGroupLabel>
+              </SidebarGroupHeader>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {directSections.map((section) => {
+                    const Icon = section.icon;
+                    return (
+                      <SidebarMenuItem key={section.id}>
+                        <SidebarMenuButton active={activeSection === section.id} onClick={() => setActiveSection(section.id)} tooltip={section.label} type="button">
+                          <Icon className="h-4 w-4" />
+                          <span className={cn(!sidebarOpen && "hidden")}>{section.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupHeader>
+                <SidebarGroupLabel>Notifications</SidebarGroupLabel>
+                <SidebarGroupAction disabled={unreadNotifications === 0} onClick={handleMarkAllNotificationsRead} tooltip="Mark all as read">
+                  <CheckCheck className="h-4 w-4" />
+                </SidebarGroupAction>
+              </SidebarGroupHeader>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <Collapsible className="group/collapsible" defaultOpen>
+                    <SidebarMenuItem>
+                      <div className="relative">
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton active={activeSection === "notifications" || activeSection === "transactions" || activeSection === "customers"} tooltip="Commerce">
+                            <Bell className="h-4 w-4" />
+                            <span className={cn(!sidebarOpen && "hidden")}>Commerce</span>
+                            {sidebarOpen ? <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" /> : null}
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        {unreadNotifications > 0 ? <SidebarMenuBadge>{unreadNotifications}</SidebarMenuBadge> : null}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <SidebarMenuAction showOnHover>
+                              <span className="sr-only">Commerce actions</span>
+                            </SidebarMenuAction>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" side="right">
+                            <DropdownMenuLabel>Commerce</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => setActiveSection("notifications")}>Open notifications</DropdownMenuItem>
+                            <DropdownMenuItem disabled={unreadNotifications === 0} onClick={handleMarkAllNotificationsRead}>
+                              Mark all notifications read
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {commerceSections.map((section) => {
+                            const Icon = section.icon;
+                            const isNotification = section.id === "notifications";
+                            return (
+                              <SidebarMenuSubItem key={section.id}>
+                                <SidebarMenuSubButton active={activeSection === section.id} onClick={() => setActiveSection(section.id)} type="button">
+                                  <Icon className="h-4 w-4" />
+                                  <span>{section.label}</span>
+                                  {isNotification && unreadNotifications > 0 ? (
+                                    <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                      {unreadNotifications}
+                                    </span>
+                                  ) : null}
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {governanceSections.length > 0 ? (
+              <SidebarGroup>
+                <SidebarGroupHeader>
+                  <SidebarGroupLabel>Governance</SidebarGroupLabel>
+                </SidebarGroupHeader>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <Collapsible className="group/collapsible" defaultOpen={session.user.role === "super_admin"}>
+                      <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton active={activeSection === "logs" || activeSection === "admins"} tooltip="Governance">
+                            <ShieldCheck className="h-4 w-4" />
+                            <span className={cn(!sidebarOpen && "hidden")}>Governance</span>
+                            {sidebarOpen ? <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" /> : null}
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {governanceSections.map((section) => {
+                              const Icon = section.icon;
+                              return (
+                                <SidebarMenuSubItem key={section.id}>
+                                  <SidebarMenuSubButton active={activeSection === section.id} onClick={() => setActiveSection(section.id)} type="button">
+                                    <Icon className="h-4 w-4" />
+                                    <span>{section.label}</span>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ) : null}
+          </SidebarContent>
+
+          <SidebarFooter>
+            <div className={cn("rounded-xl border border-slate-200 bg-slate-50", sidebarOpen ? "p-3" : "p-2")}>
+              <div className={cn("flex items-center gap-3", !sidebarOpen && "justify-center")}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    {sidebarOpen ? (
+                      <button className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 text-left transition-colors hover:bg-white">
+                        <Avatar className="h-10 w-10 text-xs" initials={getInitials(session.user.email)} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-slate-950">{session.user.email}</p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">{session.user.role.replace("_", " ")}</p>
+                        </div>
+                        <MoreHorizontal className="h-4 w-4 text-slate-500" />
+                      </button>
+                    ) : (
+                      <button className="rounded-xl p-1 transition-colors hover:bg-white">
+                        <Avatar className="h-10 w-10 text-xs" initials={getInitials(session.user.email)} />
+                        <span className="sr-only">Open account menu</span>
+                      </button>
+                    )}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" side="top">
+                    <DropdownMenuLabel>{session.user.email}</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => setActiveSection("notifications")}>Notifications</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSidebarOpen((open) => !open)}>
+                      {sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              {sidebarOpen ? (
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", session.mode === "live" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                    {session.mode.toUpperCase()} MODE
+                  </span>
+                  <AdminButton className="px-3" onClick={handleLogout} variant="ghost">
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </AdminButton>
+                </div>
+              ) : null}
+            </div>
+          </SidebarFooter>
+        </Sidebar>
+
+        <SidebarInset className="px-4 py-6 sm:px-6 lg:px-8">
+          <AdminPanel className="flex flex-col gap-4 p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-gold">{activeSection}</p>
@@ -517,10 +812,30 @@ export default function AdminConsole() {
                 </p>
               </div>
 
-              <Button className="md:hidden" onClick={handleLogout} variant="ghost">
+              <AdminButton className="md:hidden" onClick={handleLogout} variant="ghost">
                 <LogOut className="h-4 w-4" />
                 Logout
-              </Button>
+              </AdminButton>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto md:hidden">
+              {visibleSections.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition",
+                      activeSection === section.id ? "bg-deep-blue text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {section.label}
+                  </button>
+                );
+              })}
             </div>
 
             {shouldShowRangeFilter ? (
@@ -531,7 +846,7 @@ export default function AdminConsole() {
                     type="button"
                     onClick={() => setRange(option.value)}
                     className={cn(
-                      "rounded-full px-4 py-2 text-sm font-semibold transition",
+                      "rounded-xl px-4 py-2 text-sm font-semibold transition",
                       range === option.value ? "bg-deep-blue text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
                     )}
                   >
@@ -540,11 +855,11 @@ export default function AdminConsole() {
                 ))}
               </div>
             ) : null}
-          </div>
+          </AdminPanel>
 
           {loadingData ? (
-            <div className="mt-6 flex items-center gap-3 rounded-[28px] border border-slate-200 bg-white p-4 text-slate-600">
-              <LoaderCircle className="h-5 w-5 animate-spin" />
+            <div className="mt-6 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-slate-600">
+              <Spinner className="text-slate-500" />
               Refreshing admin data...
             </div>
           ) : null}
@@ -570,7 +885,7 @@ export default function AdminConsole() {
                 />
               ) : (
                 <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-                  <Card className="rounded-[32px] p-6">
+                  <AdminPanel className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Inflow Over Time</p>
@@ -590,9 +905,9 @@ export default function AdminConsole() {
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                  </Card>
+                  </AdminPanel>
 
-                  <Card className="rounded-[32px] p-6">
+                  <AdminPanel className="p-6">
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Sales By Course</p>
                     <h3 className="mt-2 text-2xl font-bold text-slate-950">Course demand snapshot</h3>
                     <div className="mt-6 h-80">
@@ -606,7 +921,7 @@ export default function AdminConsole() {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                  </Card>
+                  </AdminPanel>
                 </div>
               )}
             </div>
@@ -614,7 +929,7 @@ export default function AdminConsole() {
 
           {activeSection === "courses" ? (
             <div className="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.2fr]">
-              <Card className="rounded-[32px] p-6">
+              <AdminPanel className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Catalog Order</p>
@@ -629,37 +944,37 @@ export default function AdminConsole() {
                       <SortableContext items={courses.map((course) => course.slug)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-3">
                           {courses.map((course) => (
-                            <SortableCourseRow key={course.slug} active={selectedCourseSlug === course.slug} course={course} onSelect={() => setSelectedCourseSlug(course.slug)} />
+                            <SortableCourseRow key={course.slug} active={selectedCourseSlug === course.slug} course={course} onSelect={() => selectCourse(course.slug)} />
                           ))}
                         </div>
                       </SortableContext>
                     </DndContext>
                   )}
                 </div>
-              </Card>
+              </AdminPanel>
 
-              <Card className="rounded-[32px] p-6">
+              <AdminPanel className="p-6">
                 {courseDraft ? (
                   <div className="space-y-6">
                     <div className="grid gap-4 md:grid-cols-2">
                       <Field label="Slug">
-                        <Input value={courseDraft.slug} onChange={(event) => setCourseDraft({ ...courseDraft, slug: event.target.value })} />
+                        <AdminInput value={courseDraft.slug} onChange={(event) => setCourseDraft({ ...courseDraft, slug: event.target.value })} />
                       </Field>
                       <Field label="Title">
-                        <Input value={courseDraft.title} onChange={(event) => setCourseDraft({ ...courseDraft, title: event.target.value })} />
+                        <AdminInput value={courseDraft.title} onChange={(event) => setCourseDraft({ ...courseDraft, title: event.target.value })} />
                       </Field>
                     </div>
 
                     <Field label="Short Title">
-                      <Input value={courseDraft.shortTitle || ""} onChange={(event) => setCourseDraft({ ...courseDraft, shortTitle: event.target.value })} />
+                      <AdminInput value={courseDraft.shortTitle || ""} onChange={(event) => setCourseDraft({ ...courseDraft, shortTitle: event.target.value })} />
                     </Field>
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <Field label="Net Price You Want To Receive">
-                        <Input type="number" value={courseDraft.priceNaira} onChange={(event) => setCourseDraft({ ...courseDraft, priceNaira: Number(event.target.value || 0) })} />
+                        <AdminInput type="number" value={courseDraft.priceNaira} onChange={(event) => setCourseDraft({ ...courseDraft, priceNaira: Number(event.target.value || 0) })} />
                       </Field>
                       <Field label="Paystack Final Charge Preview">
-                        <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                           <p className="font-semibold text-slate-950">{formatCurrencyFromNaira(pricingPreview?.totalChargeNaira || 0)}</p>
                           <p className="mt-1 text-xs text-slate-500">Includes {formatCurrencyFromNaira(pricingPreview?.processingFeeNaira || 0)} processing fee</p>
                         </div>
@@ -667,15 +982,15 @@ export default function AdminConsole() {
                     </div>
 
                     <Field label="Summary">
-                      <Textarea className="min-h-28" value={courseDraft.summary} onChange={(event) => setCourseDraft({ ...courseDraft, summary: event.target.value })} />
+                      <AdminTextarea className="min-h-28" value={courseDraft.summary} onChange={(event) => setCourseDraft({ ...courseDraft, summary: event.target.value })} />
                     </Field>
 
                     <Field label="Long Description">
-                      <Textarea value={courseDraft.longDescription} onChange={(event) => setCourseDraft({ ...courseDraft, longDescription: event.target.value })} />
+                      <AdminTextarea value={courseDraft.longDescription} onChange={(event) => setCourseDraft({ ...courseDraft, longDescription: event.target.value })} />
                     </Field>
 
                     <Field label="Deliverables">
-                      <Textarea
+                      <AdminTextarea
                         className="min-h-32"
                         value={courseDraft.deliverables.join("\n")}
                         onChange={(event) =>
@@ -693,30 +1008,129 @@ export default function AdminConsole() {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                      <Button onClick={handleSaveCourse} variant="gold">
+                      <AdminButton onClick={handleSaveCourse} variant="gold">
                         Save Course
-                      </Button>
-                      <Button className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" onClick={handleDeleteCourse} variant="ghost">
+                      </AdminButton>
+                      <AdminButton className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" onClick={handleDeleteCourse} variant="ghost">
                         Hard Delete
-                      </Button>
+                      </AdminButton>
                     </div>
                   </div>
                 ) : (
                   <EmptyState title="Select a course" description="Choose a course from the left to edit details, pricing, and publish state." compact />
                 )}
-              </Card>
+              </AdminPanel>
+            </div>
+          ) : null}
+
+          {activeSection === "notifications" ? (
+            <div className="mt-6 space-y-6">
+              <AdminPanel className="p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Notifications</p>
+                    <h3 className="mt-2 text-2xl font-bold text-slate-950">Purchase activity and alerts</h3>
+                    <p className="mt-2 text-sm leading-7 text-slate-500">
+                      Every verified course purchase creates a notification here so the team can follow up quickly.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                      {unreadNotifications} unread
+                    </span>
+                    <AdminButton disabled={unreadNotifications === 0} onClick={handleMarkAllNotificationsRead} variant="ghost">
+                      <CheckCheck className="h-4 w-4" />
+                      Mark all read
+                    </AdminButton>
+                  </div>
+                </div>
+              </AdminPanel>
+
+              {notifications.length === 0 ? (
+                <EmptyState
+                  title="No notifications yet"
+                  description="New purchase alerts will appear here automatically after verified Paystack payments."
+                />
+              ) : (
+                <div className="space-y-4">
+                  {notifications.map((notification) => (
+                    <AdminPanel
+                      key={notification.id}
+                      className={cn(
+                        "p-5 transition-colors",
+                        !notification.readAt && "border-brand-gold/50 bg-brand-gold/5",
+                      )}
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-slate-950">{notification.title}</p>
+                            {!notification.readAt ? (
+                              <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white">
+                                New
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 text-sm leading-7 text-slate-600">{notification.message}</p>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                            <span>{notification.courseTitle || "Purchase"}</span>
+                            <span>{notification.customerEmail || "-"}</span>
+                            <span>{notification.amountKobo ? formatCurrencyFromKobo(notification.amountKobo) : "-"}</span>
+                            <span>{formatRelativeTime(notification.createdAt)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {notification.transactionReference && session.permissions.canViewTransactions ? (
+                            <AdminButton
+                              className="px-3"
+                              onClick={() => setActiveSection("transactions")}
+                              variant="ghost"
+                            >
+                              View transaction
+                            </AdminButton>
+                          ) : null}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Open notification actions</span>
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Notification</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => handleNotificationStatus(notification.id, notification.readAt ? "unread" : "read")}>
+                                Mark as {notification.readAt ? "unread" : "read"}
+                              </DropdownMenuItem>
+                              {notification.transactionReference && session.permissions.canViewTransactions ? (
+                                <DropdownMenuItem onClick={() => setActiveSection("transactions")}>
+                                  Open transactions
+                                </DropdownMenuItem>
+                              ) : null}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleDismissNotification(notification.id)}>
+                                Dismiss
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </AdminPanel>
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
 
           {activeSection === "transactions" ? (
-            <Card className="mt-6 rounded-[32px] p-6">
+            <AdminPanel className="mt-6 p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Transaction Ledger</p>
                   <h3 className="mt-2 text-2xl font-bold text-slate-950">Verified payment records</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button
+                  <AdminButton
                     className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
                     disabled={selectedTransactions.length === 0}
                     onClick={() => handleDeleteTransactions(selectedTransactions)}
@@ -724,7 +1138,7 @@ export default function AdminConsole() {
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete Selected
-                  </Button>
+                  </AdminButton>
                 </div>
               </div>
 
@@ -733,7 +1147,7 @@ export default function AdminConsole() {
                   <EmptyState title="No transactions yet" description="Once payments are verified, transaction records will appear here." compact />
                 </div>
               ) : (
-                <div className="mt-6 overflow-hidden rounded-[28px] border border-slate-200">
+                <div className="mt-6 overflow-hidden rounded-xl border border-slate-200">
                   <Table>
                     <TableHeader className="bg-slate-50">
                       <TableRow className="hover:bg-slate-50">
@@ -779,9 +1193,9 @@ export default function AdminConsole() {
                           </TableCell>
                           <TableCell>{formatDate(transaction.paidAt)}</TableCell>
                           <TableCell className="text-right">
-                            <Button className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" onClick={() => handleDeleteTransactions([transaction.reference])} variant="ghost">
+                            <AdminButton className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" onClick={() => handleDeleteTransactions([transaction.reference])} variant="ghost">
                               Delete
-                            </Button>
+                            </AdminButton>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -789,17 +1203,17 @@ export default function AdminConsole() {
                   </Table>
                 </div>
               )}
-            </Card>
+            </AdminPanel>
           ) : null}
 
           {activeSection === "customers" ? (
-            <Card className="mt-6 rounded-[32px] p-6">
+            <AdminPanel className="mt-6 p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Customers</p>
                   <h3 className="mt-2 text-2xl font-bold text-slate-950">Customer records mirrored from verified payments</h3>
                 </div>
-                <Button
+                <AdminButton
                   className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
                   disabled={selectedCustomers.length === 0}
                   onClick={() => handleDeleteCustomers(selectedCustomers)}
@@ -807,7 +1221,7 @@ export default function AdminConsole() {
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete Selected
-                </Button>
+                </AdminButton>
               </div>
 
               {customers.length === 0 ? (
@@ -815,7 +1229,7 @@ export default function AdminConsole() {
                   <EmptyState title="No customers yet" description="Customer records will appear after verified purchases are mirrored into Firestore." compact />
                 </div>
               ) : (
-                <div className="mt-6 overflow-hidden rounded-[28px] border border-slate-200">
+                <div className="mt-6 overflow-hidden rounded-xl border border-slate-200">
                   <Table>
                     <TableHeader className="bg-slate-50">
                       <TableRow className="hover:bg-slate-50">
@@ -846,9 +1260,9 @@ export default function AdminConsole() {
                           <TableCell>{formatCurrencyFromKobo(customer.totalNetKobo)}</TableCell>
                           <TableCell>{formatDate(customer.lastPurchaseAt)}</TableCell>
                           <TableCell className="text-right">
-                            <Button className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" onClick={() => handleDeleteCustomers([customer.email])} variant="ghost">
+                            <AdminButton className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" onClick={() => handleDeleteCustomers([customer.email])} variant="ghost">
                               Delete
-                            </Button>
+                            </AdminButton>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -856,7 +1270,7 @@ export default function AdminConsole() {
                   </Table>
                 </div>
               )}
-            </Card>
+            </AdminPanel>
           ) : null}
 
           {activeSection === "logs" ? (
@@ -865,14 +1279,14 @@ export default function AdminConsole() {
                 <EmptyState title="No audit activity yet" description="Admin session views, finance access, and sign-ins will appear here once the team starts using the console." />
               ) : (
                 <div className="grid gap-6 xl:grid-cols-2">
-                  <Card className="rounded-[32px] p-6">
+                  <AdminPanel className="p-6">
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Audit Logs</p>
                     <div className="mt-6 space-y-3">
                       {auditLogs.length === 0 ? (
                         <EmptyState title="No audit logs yet" description="Action logs will appear here as admins use the console." compact />
                       ) : (
                         auditLogs.map((item) => (
-                          <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                          <div key={item.id} className="rounded-xl border border-slate-200 p-4">
                             <p className="font-semibold text-slate-950">{item.action}</p>
                             <p className="mt-1 text-sm text-slate-500">{item.actorEmail || "System"}</p>
                             <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">
@@ -882,16 +1296,16 @@ export default function AdminConsole() {
                         ))
                       )}
                     </div>
-                  </Card>
+                  </AdminPanel>
 
-                  <Card className="rounded-[32px] p-6">
+                  <AdminPanel className="p-6">
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Login Activity</p>
                     <div className="mt-6 space-y-3">
                       {loginLogs.length === 0 ? (
                         <EmptyState title="No login activity yet" description="Successful admin sign-ins will be listed here." compact />
                       ) : (
                         loginLogs.map((item) => (
-                          <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                          <div key={item.id} className="rounded-xl border border-slate-200 p-4">
                             <p className="font-semibold text-slate-950">{item.email}</p>
                             <p className="mt-1 text-sm text-slate-500">{item.role.replace("_", " ")}</p>
                             <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">{formatDate(item.createdAt)}</p>
@@ -899,7 +1313,7 @@ export default function AdminConsole() {
                         ))
                       )}
                     </div>
-                  </Card>
+                  </AdminPanel>
                 </div>
               )}
             </div>
@@ -907,32 +1321,32 @@ export default function AdminConsole() {
 
           {activeSection === "admins" ? (
             <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-              <Card className="rounded-[32px] p-6">
+              <AdminPanel className="p-6">
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Onboard Admin</p>
                 <div className="mt-6 space-y-4">
                   <Field label="Google account email">
-                    <Input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} />
+                    <AdminInput value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} />
                   </Field>
                   <Field label="Role">
-                    <select className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "admin" | "super_admin")}>
+                    <AdminSelect value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "admin" | "super_admin")}>
                       <option value="admin">Admin</option>
                       <option value="super_admin">Super Admin</option>
-                    </select>
+                    </AdminSelect>
                   </Field>
-                  <Button className="w-full" onClick={handleInviteAdmin} variant="gold">
+                  <AdminButton className="w-full disabled:bg-slate-200 disabled:text-slate-400" disabled={!inviteEmailValid} onClick={handleInviteAdmin} variant="gold">
                     Save Access
-                  </Button>
+                  </AdminButton>
                 </div>
-              </Card>
+              </AdminPanel>
 
-              <Card className="rounded-[32px] p-6">
+              <AdminPanel className="p-6">
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Current Admin Directory</p>
                 <div className="mt-6 space-y-3">
                   {adminUsers.length === 0 ? (
                     <EmptyState title="No additional admins yet" description="Invite admins here once the team is ready to access the console." compact />
                   ) : (
                     adminUsers.map((user) => (
-                      <div key={user.email} className="flex flex-col gap-2 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div key={user.email} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="font-semibold text-slate-950">{user.email}</p>
                           <p className="mt-1 text-sm text-slate-500">{user.role.replace("_", " ")}</p>
@@ -944,12 +1358,12 @@ export default function AdminConsole() {
                     ))
                   )}
                 </div>
-              </Card>
+              </AdminPanel>
             </div>
           ) : null}
-        </main>
+        </SidebarInset>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }
 
@@ -964,7 +1378,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function ToggleField({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
+    <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
       <span className="font-semibold text-slate-950">{label}</span>
       <input checked={checked} onChange={(event) => onChange(event.target.checked)} type="checkbox" />
     </label>
@@ -973,21 +1387,41 @@ function ToggleField({ checked, label, onChange }: { checked: boolean; label: st
 
 function MetricCard({ icon: Icon, label, value, compact = false }: { icon: typeof Activity; label: string; value: string; compact?: boolean }) {
   return (
-    <Card className="rounded-[32px] p-6">
+    <AdminPanel className="p-6">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p>
         <Icon className="h-5 w-5 text-brand-gold" />
       </div>
       <p className={cn("mt-5 font-bold text-slate-950", compact ? "text-2xl" : "text-4xl")}>{value}</p>
-    </Card>
+    </AdminPanel>
   );
 }
 
 function EmptyState({ title, description, compact = false }: { title: string; description: string; compact?: boolean }) {
   return (
-    <Card className={cn("rounded-[32px] border-dashed p-8 text-center", compact ? "bg-slate-50" : "bg-white")}>
+    <AdminPanel className={cn("border-dashed p-8 text-center", compact ? "bg-slate-50" : "bg-white")}>
       <p className="text-xl font-semibold text-slate-950">{title}</p>
       <p className="mt-3 text-sm leading-7 text-slate-500">{description}</p>
-    </Card>
+    </AdminPanel>
   );
+}
+
+function AdminPanel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <Card className={cn("rounded-2xl border-slate-200 shadow-none", className)} {...props} />;
+}
+
+function AdminButton({ className, ...props }: ComponentProps<typeof Button>) {
+  return <Button className={cn("rounded-xl shadow-none hover:translate-y-0", className)} {...props} />;
+}
+
+function AdminInput({ className, ...props }: ComponentProps<typeof Input>) {
+  return <Input className={cn("rounded-xl", className)} {...props} />;
+}
+
+function AdminTextarea({ className, ...props }: ComponentProps<typeof Textarea>) {
+  return <Textarea className={cn("rounded-xl", className)} {...props} />;
+}
+
+function AdminSelect({ className, ...props }: ComponentProps<typeof Select>) {
+  return <Select className={cn("rounded-xl", className)} {...props} />;
 }

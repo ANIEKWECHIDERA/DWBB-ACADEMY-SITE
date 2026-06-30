@@ -5,6 +5,7 @@ import type {
   AdminCustomer,
   AdminDashboardMetrics,
   AdminDirectoryUser,
+  AdminNotification,
   AdminSession,
   AdminTransaction,
   AuditLogItem,
@@ -135,6 +136,43 @@ export async function getAdminLogs(user: User) {
 export async function getAdminUsers(user: User) {
   const payload = await adminFetch<{ users: AdminDirectoryUser[] }>(user, "/api/admin/users");
   return payload.users;
+}
+
+export async function getAdminNotifications(user: User) {
+  const payload = await adminFetch<{ notifications: AdminNotification[]; unreadCount: number }>(
+    user,
+    "/api/admin/notifications",
+  );
+  return payload;
+}
+
+export async function markAdminNotification(user: User, notificationId: string, status: "read" | "unread") {
+  return adminFetch<{ notification: AdminNotification | null }>(user, `/api/admin/notifications/${notificationId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function dismissAdminNotification(user: User, notificationId: string) {
+  const token = await user.getIdToken();
+  const response = await fetch(apiUrl(`/api/admin/notifications/${notificationId}`), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "Unable to dismiss notification.");
+  }
+}
+
+export async function markAllAdminNotificationsRead(user: User) {
+  return adminFetch<{ updatedCount: number }>(user, "/api/admin/notifications/mark-all-read", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 export async function updateAdminUser(user: User, email: string, role: "admin" | "super_admin", active = true) {

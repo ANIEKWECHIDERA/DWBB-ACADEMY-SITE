@@ -121,3 +121,18 @@ export interface AdminDirectoryUser {
   invitedBy?: string;
   updatedAt?: string;
 }
+
+export interface AdminNotification {
+  id: string;
+  kind: "purchase";
+  title: string;
+  message: string;
+  courseSlug?: string;
+  courseTitle?: string;
+  customerName?: string;
+  customerEmail?: string;
+  transactionReference?: string;
+  amountKobo?: number;
+  createdAt: string;
+  readAt?: string | null;
+}

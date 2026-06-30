@@ -9,6 +9,7 @@ import nodemailer from "nodemailer";
 
 import {
   deleteManagedCourse,
+  dismissNotification,
   deleteCustomersByEmail,
   deleteTransactionsByReference,
   ensureManagedCoursesSeeded,
@@ -20,12 +21,15 @@ import {
   listCustomers,
   listLoginLogs,
   listManagedCourses,
+  listNotifications,
   listTransactions,
+  markAllNotificationsRead,
   mirrorVerifiedPurchase,
   normalizeEmail,
   recordAdminLogin,
   recordAuditLog,
   reorderManagedCourses,
+  updateNotificationStatus,
   updateManagedCourse,
   upsertAdminUser,
 } from "./admin-store.mjs";
@@ -284,6 +288,64 @@ app.delete("/api/admin/customers", requireAdminAuth({ superAdminOnly: true }), a
     entityType: "customer",
     entityId: "collection",
     metadata: { emails },
+  });
+  res.status(204).end();
+});
+
+app.get("/api/admin/notifications", requireAdminAuth(), async (req, res) => {
+  const payload = await listNotificationsSafe();
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "notifications.viewed",
+    entityType: "notification",
+    entityId: "collection",
+    metadata: {},
+  });
+  res.json(payload);
+});
+
+app.patch("/api/admin/notifications/:id", requireAdminAuth(), async (req, res) => {
+  const status = req.body?.status;
+
+  if (status !== "read" && status !== "unread") {
+    return res.status(400).json({ error: "A valid notification status is required." });
+  }
+
+  const notification = await updateNotificationStatus(req.params.id, status);
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: `notification.${status}`,
+    entityType: "notification",
+    entityId: req.params.id,
+    metadata: {},
+  });
+  res.json({ notification });
+});
+
+app.post("/api/admin/notifications/mark-all-read", requireAdminAuth(), async (req, res) => {
+  const updatedCount = await markAllNotificationsRead();
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "notifications.mark_all_read",
+    entityType: "notification",
+    entityId: "collection",
+    metadata: { updatedCount },
+  });
+  res.json({ updatedCount });
+});
+
+app.delete("/api/admin/notifications/:id", requireAdminAuth(), async (req, res) => {
+  await dismissNotification(req.params.id);
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "notification.dismissed",
+    entityType: "notification",
+    entityId: req.params.id,
+    metadata: {},
   });
   res.status(204).end();
 });
@@ -912,6 +974,14 @@ async function listAdminUsersSafe() {
   }
 
   return listAdminUsers();
+}
+
+async function listNotificationsSafe() {
+  if (!isFirebaseAdminConfigured()) {
+    return { notifications: [], unreadCount: 0 };
+  }
+
+  return listNotifications();
 }
 
 async function mirrorPurchaseSafe(payload) {

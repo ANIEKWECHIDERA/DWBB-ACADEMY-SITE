@@ -13,6 +13,7 @@ const COLLECTIONS = {
   courses: "courses",
   customers: "customers",
   loginLogs: "admin_logins",
+  notifications: "notifications",
   transactions: "transactions",
 };
 
@@ -228,11 +229,77 @@ export async function listLoginLogs(limit = 100) {
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
+export async function listNotifications(limit = 100) {
+  const firestore = firestoreRequired();
+  const snapshot = await firestore
+    .collection(COLLECTIONS.notifications)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+
+  const notifications = snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((item) => !item.dismissedAt);
+
+  return {
+    notifications,
+    unreadCount: notifications.filter((item) => !item.readAt).length,
+  };
+}
+
+export async function updateNotificationStatus(id, status) {
+  const firestore = firestoreRequired();
+  const ref = firestore.collection(COLLECTIONS.notifications).doc(id);
+
+  await ref.set(
+    {
+      readAt: status === "read" ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
+
+  const doc = await ref.get();
+  return doc.exists ? { id: doc.id, ...doc.data() } : null;
+}
+
+export async function dismissNotification(id) {
+  const firestore = firestoreRequired();
+  await firestore.collection(COLLECTIONS.notifications).doc(id).set(
+    {
+      dismissedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
+}
+
+export async function markAllNotificationsRead() {
+  const firestore = firestoreRequired();
+  const snapshot = await firestore.collection(COLLECTIONS.notifications).where("readAt", "==", null).get();
+  const batch = firestore.batch();
+
+  snapshot.docs.forEach((doc) => {
+    batch.set(
+      doc.ref,
+      {
+        readAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+  });
+
+  await batch.commit();
+  return snapshot.size;
+}
+
 export async function mirrorVerifiedPurchase({ purchase, transaction, course }) {
   const firestore = firestoreRequired();
   const normalizedEmail = normalizeEmail(purchase.email);
   const transactionRef = firestore.collection(COLLECTIONS.transactions).doc(purchase.reference);
   const customerRef = normalizedEmail ? firestore.collection(COLLECTIONS.customers).doc(normalizedEmail) : null;
+  const notificationRef = firestore.collection(COLLECTIONS.notifications).doc(purchase.reference);
 
   const transactionPayload = {
     amountKobo: purchase.amount,
@@ -254,6 +321,24 @@ export async function mirrorVerifiedPurchase({ purchase, transaction, course }) 
   };
 
   await transactionRef.set(transactionPayload, { merge: true });
+  await notificationRef.set(
+    {
+      kind: "purchase",
+      title: "New purchase received",
+      message: `${purchase.name} purchased ${purchase.courseTitle}.`,
+      courseSlug: purchase.courseSlug,
+      courseTitle: purchase.courseTitle,
+      customerName: purchase.name,
+      customerEmail: normalizedEmail,
+      transactionReference: purchase.reference,
+      amountKobo: Number(transaction.amount),
+      createdAt: purchase.paidAt,
+      readAt: null,
+      dismissedAt: null,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
 
   if (customerRef) {
     const customerDoc = await customerRef.get();
