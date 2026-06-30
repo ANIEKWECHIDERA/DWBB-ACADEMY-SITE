@@ -8,6 +8,7 @@ import express from "express";
 import nodemailer from "nodemailer";
 
 import { digitalCourseCatalog, findDigitalCourse } from "./course-catalog.mjs";
+import { getCheckoutPricing } from "../src/lib/paystackPricing.js";
 
 dotenv.config();
 
@@ -74,13 +75,21 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/store/courses", (_req, res) => {
   res.json({
-    courses: digitalCourseCatalog.map((course) => ({
-      slug: course.slug,
-      title: course.title,
-      priceNaira: course.priceNaira,
-      price: formatNaira(course.priceNaira),
-      deliverables: course.deliverables,
-    })),
+    courses: digitalCourseCatalog.map((course) => {
+      const checkoutPricing = getCheckoutPricing(course.priceNaira);
+
+      return {
+        checkoutPrice: formatNaira(checkoutPricing.totalChargeNaira),
+        checkoutPriceNaira: checkoutPricing.totalChargeNaira,
+        processingFee: formatNaira(checkoutPricing.processingFeeNaira),
+        processingFeeNaira: checkoutPricing.processingFeeNaira,
+        slug: course.slug,
+        title: course.title,
+        priceNaira: course.priceNaira,
+        price: formatNaira(course.priceNaira),
+        deliverables: course.deliverables,
+      };
+    }),
   });
 });
 
@@ -101,13 +110,14 @@ app.post("/api/payments/initialize", initializeRateLimit, async (req, res) => {
     const { courseSlug, name, email, phone } = req.body ?? {};
     const course = findDigitalCourse(courseSlug);
     const publicAppBaseUrl = getPublicAppBaseUrl(req);
+    const checkoutPricing = course ? getCheckoutPricing(course.priceNaira) : null;
 
     if (!course || !name || !email) {
       return res.status(400).json({ error: "Missing required payment details." });
     }
 
     const reference = `dwbb-${course.slug}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const amount = course.priceNaira * 100;
+    const amount = checkoutPricing.totalChargeKobo;
 
     const response = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -128,10 +138,13 @@ app.post("/api/payments/initialize", initializeRateLimit, async (req, res) => {
             { display_name: "Phone", variable_name: "phone", value: phone || "" },
           ],
           appBaseUrl: publicAppBaseUrl,
+          chargedAmountKobo: checkoutPricing.totalChargeKobo,
           courseSlug: course.slug,
           customerName: name,
           customerPhone: phone || "",
+          processingFeeKobo: checkoutPricing.processingFeeKobo,
           productType: "digital-course",
+          targetAmountKobo: checkoutPricing.baseAmountKobo,
         },
       }),
     });
@@ -151,6 +164,8 @@ app.post("/api/payments/initialize", initializeRateLimit, async (req, res) => {
       courseSlug: course.slug,
       courseTitle: course.title,
       amount,
+      processingFeeKobo: checkoutPricing.processingFeeKobo,
+      targetAmountKobo: checkoutPricing.baseAmountKobo,
       email,
       appBaseUrl: publicAppBaseUrl,
       createdAt: new Date().toISOString(),
@@ -161,7 +176,9 @@ app.post("/api/payments/initialize", initializeRateLimit, async (req, res) => {
       reference: payload.data.reference,
       amount,
       callbackUrl: `${publicAppBaseUrl}/payment/success`,
+      processingFeeKobo: checkoutPricing.processingFeeKobo,
       publicKey: paystackPublicKey,
+      targetAmountKobo: checkoutPricing.baseAmountKobo,
     });
   } catch (error) {
     logServerError("Payment initialize failed", error);
@@ -269,7 +286,10 @@ async function verifyAndFulfill(reference) {
     throw new Error("Payment has not been completed successfully.");
   }
 
-  if (Number(transaction.amount) !== course.priceNaira * 100) {
+  const expectedAmountKobo = Number(transaction.metadata?.chargedAmountKobo || getCheckoutPricing(course.priceNaira).totalChargeKobo);
+  const legacyAmountKobo = course.priceNaira * 100;
+
+  if (Number(transaction.amount) !== expectedAmountKobo && Number(transaction.amount) !== legacyAmountKobo) {
     throw new Error("Payment amount mismatch detected.");
   }
 
@@ -299,6 +319,9 @@ async function verifyAndFulfill(reference) {
     name: customerName,
     phone: customerPhone,
     amount: transaction.amount,
+    chargedAmountKobo: Number(transaction.amount),
+    coursePriceKobo: Number(transaction.metadata?.targetAmountKobo || course.priceNaira * 100),
+    processingFeeKobo: Number(transaction.metadata?.processingFeeKobo || Number(transaction.amount) - course.priceNaira * 100),
     paidAt: new Date().toISOString(),
     downloadToken,
     expiresAt,

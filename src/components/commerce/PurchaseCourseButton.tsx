@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { getCheckoutPricing } from "@/lib/paystackPricing";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { startCourseCheckout, type PurchaseFormValues } from "@/lib/payments";
@@ -33,6 +34,7 @@ export function PurchaseCourseButton({
   const [values, setValues] = useState<PurchaseFormValues>(initialValues);
   const [portalReady, setPortalReady] = useState(false);
   const { pushToast } = useToast();
+  const checkoutPricing = getCheckoutPricing(course.priceNaira);
 
   useEffect(() => {
     setPortalReady(true);
@@ -86,7 +88,7 @@ export function PurchaseCourseButton({
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-gold">Digital Course Checkout</p>
                     <h3 className="mt-3 text-3xl font-bold text-slate-950">{course.title}</h3>
                     <p className="mt-2 text-sm leading-7 text-slate-600">
-                      One-time payment. Instant download access after verified payment, plus confirmation email delivery.
+                      One-time payment. Paystack processing is added at checkout so DWBB Academy receives the full course fee.
                     </p>
                   </div>
                   <button type="button" aria-label="Close checkout" onClick={handleClose}>
@@ -130,14 +132,34 @@ export function PurchaseCourseButton({
 
                   <Card className="border border-slate-200 bg-slate-50 p-5">
                     <p className="text-sm uppercase tracking-[0.16em] text-slate-500">Order Summary</p>
-                    <p className="mt-3 text-2xl font-bold text-slate-950">{course.price}</p>
-                    <p className="mt-1 text-sm text-slate-500">{course.priceUSD}</p>
+                    <div className="mt-4 space-y-3 text-sm text-slate-600">
+                      <div className="flex items-center justify-between gap-4">
+                        <span>Course fee</span>
+                        <span className="font-semibold text-slate-950">{course.price}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span>Paystack processing</span>
+                        <span className="font-semibold text-slate-950">
+                          N{checkoutPricing.processingFeeNaira.toLocaleString("en-NG")}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-3 text-base">
+                        <span className="font-semibold text-slate-950">Total charged today</span>
+                        <span className="text-2xl font-bold text-slate-950">
+                          N{checkoutPricing.totalChargeNaira.toLocaleString("en-NG")}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-500">{course.priceUSD} course value before processing</p>
                     <p className="mt-5 text-sm font-semibold text-slate-950">What you get immediately:</p>
                     <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-600">
                       {course.digitalDeliverables.map((item) => (
                         <li key={item}>- {item}</li>
                       ))}
                     </ul>
+                    <p className="mt-5 text-xs leading-6 text-slate-500">
+                      The final Paystack amount is calculated on the server from the official course catalog, so the payable amount cannot be lowered from the browser.
+                    </p>
                     <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">
                       One-time payment only <ArrowRight className="h-3.5 w-3.5" />
                     </p>
