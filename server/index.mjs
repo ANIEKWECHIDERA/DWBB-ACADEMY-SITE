@@ -13,7 +13,7 @@ dotenv.config();
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
-const port = Number(process.env.SERVER_PORT || 8787);
+const port = Number(process.env.PORT || process.env.SERVER_PORT || 8787);
 const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
 const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
 const paystackPublicKey = process.env.PAYSTACK_PUBLIC_KEY;
@@ -21,9 +21,12 @@ const enablePaymentDebug = String(process.env.ENABLE_PAYMENT_DEBUG || "false") =
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 const downloadLinkTtlDays = Number(process.env.DOWNLOAD_LINK_TTL_DAYS || 7);
 const trustProxy = process.env.TRUST_PROXY;
-const purchasesFile = path.resolve(process.cwd(), "server/.data/purchases.json");
-const attemptsFile = path.resolve(process.cwd(), "server/.data/payment-attempts.json");
-const webhookEventsFile = path.resolve(process.cwd(), "server/.data/webhook-events.json");
+const dataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.resolve(process.cwd(), "server/.data");
+const purchasesFile = path.join(dataDir, "purchases.json");
+const attemptsFile = path.join(dataDir, "payment-attempts.json");
+const webhookEventsFile = path.join(dataDir, "webhook-events.json");
 const rateLimitStores = new Map();
 
 if (trustProxy) {

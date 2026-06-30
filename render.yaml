@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: dwbb-academy-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm run start:server
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_BASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: ENABLE_PAYMENT_DEBUG
+        value: "false"
+      - key: DOWNLOAD_LINK_TTL_DAYS
+        value: "7"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: dwbb-academy-data
+      mountPath: /var/data
+      sizeGB: 1

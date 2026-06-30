@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { SectionHeader } from "@/components/shared/SectionHeader";
 import { Card } from "@/components/ui/card";
+import { apiUrl } from "@/lib/api";
 
 interface AttemptItem {
   reference: string;
@@ -28,8 +29,8 @@ export default function PaymentConsole() {
     async function load() {
       try {
         const [attemptResponse, webhookResponse] = await Promise.all([
-          fetch("/api/payments/debug/attempts"),
-          fetch("/api/payments/debug/webhooks"),
+          fetch(apiUrl("/api/payments/debug/attempts")),
+          fetch(apiUrl("/api/payments/debug/webhooks")),
         ]);
 
         const attemptPayload = await attemptResponse.json();

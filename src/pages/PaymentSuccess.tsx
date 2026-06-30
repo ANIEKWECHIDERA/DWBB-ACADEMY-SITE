@@ -5,6 +5,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { apiUrl } from "@/lib/api";
 import { clearPaymentSession, getPaymentSession } from "@/lib/payment-session";
 import type { VerificationResponse } from "@/lib/payments";
 
@@ -29,7 +30,7 @@ export default function PaymentSuccess() {
 
     async function verify() {
       try {
-        const response = await fetch("/api/payments/verify", {
+        const response = await fetch(apiUrl("/api/payments/verify"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

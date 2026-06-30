@@ -1,5 +1,6 @@
 import PaystackPop from "@paystack/inline-js";
 
+import { apiUrl } from "@/lib/api";
 import type { Course } from "@/types/course";
 
 export interface PurchaseFormValues {
@@ -18,7 +19,7 @@ export interface VerificationResponse {
 }
 
 export async function startCourseCheckout(course: Course, customer: PurchaseFormValues) {
-  const initializeResponse = await fetch("/api/payments/initialize", {
+  const initializeResponse = await fetch(apiUrl("/api/payments/initialize"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
