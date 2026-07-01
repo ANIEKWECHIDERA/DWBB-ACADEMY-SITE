@@ -10,6 +10,24 @@ import { clearPaymentSession, getPaymentSession } from "@/lib/payment-session";
 import type { VerificationResponse } from "@/lib/payments";
 
 const paymentDebugEnabled = import.meta.env.VITE_ENABLE_PAYMENT_DEBUG === "true";
+const MAX_VERIFY_ATTEMPTS = 6;
+
+async function verifyPaymentReference(reference: string) {
+  const response = await fetch(apiUrl("/api/payments/verify"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ reference }),
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.error || "Unable to verify payment.");
+  }
+
+  return payload as VerificationResponse;
+}
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
@@ -20,6 +38,7 @@ export default function PaymentSuccess() {
   });
   const [loading, setLoading] = useState(!result && Boolean(reference));
   const [error, setError] = useState("");
+  const [attemptCount, setAttemptCount] = useState(0);
 
   useEffect(() => {
     if (!reference || result) {
@@ -27,40 +46,51 @@ export default function PaymentSuccess() {
     }
 
     let active = true;
+    let timeoutId: number | undefined;
 
-    async function verify() {
+    async function verify(nextAttempt: number) {
+      let verified = false;
+
       try {
-        const response = await fetch(apiUrl("/api/payments/verify"), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ reference }),
-        });
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(payload.error || "Unable to verify payment.");
+        if (active) {
+          setAttemptCount(nextAttempt);
         }
 
+        const payload = await verifyPaymentReference(reference);
+
         if (active) {
+          verified = true;
           setResult(payload);
+          setError("");
         }
       } catch (verificationError) {
         if (active) {
           setError(verificationError instanceof Error ? verificationError.message : "Unable to verify payment.");
+
+          if (nextAttempt < MAX_VERIFY_ATTEMPTS) {
+            const retryDelayMs = Math.min(1500 * nextAttempt, 8000);
+            timeoutId = window.setTimeout(() => {
+              verify(nextAttempt + 1);
+            }, retryDelayMs);
+            return;
+          }
         }
       } finally {
         if (active) {
-          setLoading(false);
+          if (verified || nextAttempt >= MAX_VERIFY_ATTEMPTS) {
+            setLoading(false);
+          }
         }
       }
     }
 
-    verify();
+    verify(1);
 
     return () => {
       active = false;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [reference, result]);
 
@@ -69,6 +99,25 @@ export default function PaymentSuccess() {
       clearPaymentSession();
     };
   }, []);
+
+  async function handleManualRetry() {
+    if (!reference) {
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setAttemptCount(0);
+
+    try {
+      const payload = await verifyPaymentReference(reference);
+      setResult(payload);
+    } catch (verificationError) {
+      setError(verificationError instanceof Error ? verificationError.message : "Unable to verify payment.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <section className="bg-gradient-hero py-20">
@@ -85,6 +134,7 @@ export default function PaymentSuccess() {
             <div className="mt-10 flex flex-col items-center gap-4 text-center">
               <LoaderCircle className="h-10 w-10 animate-spin text-brand-sky" />
               <p className="text-slate-600">Verifying your Paystack transaction and preparing your download...</p>
+              {attemptCount > 0 ? <p className="text-sm text-slate-500">Confirmation attempt {attemptCount} of {MAX_VERIFY_ATTEMPTS}</p> : null}
             </div>
           ) : null}
 
@@ -118,6 +168,16 @@ export default function PaymentSuccess() {
               <p className="mt-3 text-slate-600">
                 {error || "No Paystack reference was found. If you completed payment, try again in a moment."}
               </p>
+              <p className="mt-3 text-sm text-slate-500">
+                If Paystack already charged you, your payment may still be syncing. Wait a few seconds and retry confirmation.
+              </p>
+              {reference ? (
+                <div className="mt-6">
+                  <Button onClick={handleManualRetry} variant="gold">
+                    Retry Confirmation
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
 

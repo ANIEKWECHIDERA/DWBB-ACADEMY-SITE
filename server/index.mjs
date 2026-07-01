@@ -43,6 +43,7 @@ const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 const port = Number(process.env.PORT || process.env.SERVER_PORT || 8787);
 const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
+const publicApiBaseUrl = process.env.PUBLIC_API_BASE_URL || process.env.SERVER_PUBLIC_URL || "";
 const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
 const paystackPublicKey = process.env.PAYSTACK_PUBLIC_KEY;
 const enablePaymentDebug = String(process.env.ENABLE_PAYMENT_DEBUG || "false") === "true";
@@ -432,6 +433,7 @@ app.post("/api/payments/initialize", initializeRateLimit, async (req, res) => {
             { display_name: "Phone", variable_name: "phone", value: phone || "" },
           ],
           appBaseUrl: publicAppBaseUrl,
+          publicApiBaseUrl: getPublicApiBaseUrl(req),
           chargedAmountKobo: checkoutPricing.totalChargeKobo,
           courseSlug: course.slug,
           customerName: name,
@@ -489,7 +491,9 @@ app.post("/api/payments/verify", verifyRateLimit, async (req, res) => {
       return res.status(400).json({ error: "Payment reference is required." });
     }
 
-    const fulfillment = await verifyAndFulfill(reference);
+    const fulfillment = await verifyAndFulfill(reference, {
+      publicApiBaseUrl: getPublicApiBaseUrl(req),
+    });
     res.json(fulfillment);
   } catch (error) {
     logServerError("Payment verification failed", error);
@@ -514,7 +518,9 @@ app.post("/api/payments/webhook", webhookRateLimit, async (req, res) => {
     if (req.body?.event === "charge.success") {
       const reference = req.body?.data?.reference;
       if (reference) {
-        verifyAndFulfill(reference).catch((error) => {
+        verifyAndFulfill(reference, {
+          publicApiBaseUrl: getPublicApiBaseUrl(req),
+        }).catch((error) => {
           logServerError("Webhook fulfillment failed", error);
         });
       }
@@ -553,7 +559,7 @@ app.listen(port, () => {
   console.log(`DWBB Academy backend running on http://localhost:${port}`);
 });
 
-async function verifyAndFulfill(reference) {
+async function verifyAndFulfill(reference, options = {}) {
   const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
     headers: {
       Authorization: `Bearer ${paystackSecretKey}`,
@@ -570,6 +576,7 @@ async function verifyAndFulfill(reference) {
   const customerName = transaction.metadata?.customerName || transaction.customer?.first_name || "Customer";
   const customerPhone = transaction.metadata?.customerPhone || "";
   const publicAppBaseUrl = normalizeAppBaseUrl(transaction.metadata?.appBaseUrl || appBaseUrl);
+  const publicDownloadBaseUrl = normalizeApiBaseUrl(options.publicApiBaseUrl || transaction.metadata?.publicApiBaseUrl || publicApiBaseUrl || publicAppBaseUrl);
   const course = await getCourseForCheckout(courseSlug);
 
   if (!course) {
@@ -596,14 +603,14 @@ async function verifyAndFulfill(reference) {
       alreadyFulfilled: true,
       courseTitle: existing.courseTitle,
       emailPreviewUrl: existing.emailPreviewUrl || null,
-      downloadUrl: `${publicAppBaseUrl}/api/download/${existing.downloadToken}`,
+      downloadUrl: `${normalizeApiBaseUrl(existing.downloadBaseUrl || publicDownloadBaseUrl)}/api/download/${existing.downloadToken}`,
       message: "Payment verified. Your download is ready.",
     };
   }
 
   const downloadToken = crypto.randomBytes(24).toString("hex");
   const expiresAt = createDownloadExpiry().toISOString();
-  const downloadUrl = `${publicAppBaseUrl}/api/download/${downloadToken}`;
+  const downloadUrl = `${publicDownloadBaseUrl}/api/download/${downloadToken}`;
 
   const purchase = {
     reference,
@@ -618,6 +625,7 @@ async function verifyAndFulfill(reference) {
     processingFeeKobo: Number(transaction.metadata?.processingFeeKobo || Number(transaction.amount) - course.priceNaira * 100),
     paidAt: new Date().toISOString(),
     downloadToken,
+    downloadBaseUrl: publicDownloadBaseUrl,
     expiresAt,
     emailDeliveryStatus: transaction.customer?.email ? "pending" : "skipped",
     emailPreviewUrl: null,
@@ -851,6 +859,32 @@ function getPublicAppBaseUrl(req) {
 
 function normalizeAppBaseUrl(value) {
   return String(value || appBaseUrl).replace(/\/+$/, "");
+}
+
+function getPublicApiBaseUrl(req) {
+  const forwardedProtoHeader = req.headers["x-forwarded-proto"];
+  const forwardedHostHeader = req.headers["x-forwarded-host"];
+  const hostHeader = req.headers.host;
+  const forwardedProto = Array.isArray(forwardedProtoHeader) ? forwardedProtoHeader[0] : forwardedProtoHeader;
+  const forwardedHost = Array.isArray(forwardedHostHeader) ? forwardedHostHeader[0] : forwardedHostHeader;
+
+  if (publicApiBaseUrl) {
+    return normalizeApiBaseUrl(publicApiBaseUrl);
+  }
+
+  if (trustProxy && (forwardedHost || hostHeader)) {
+    return normalizeApiBaseUrl(`${forwardedProto || "https"}://${forwardedHost || hostHeader}`);
+  }
+
+  if (hostHeader) {
+    return normalizeApiBaseUrl(`${isProduction ? "https" : "http"}://${hostHeader}`);
+  }
+
+  return normalizeApiBaseUrl(appBaseUrl);
+}
+
+function normalizeApiBaseUrl(value) {
+  return String(value || publicApiBaseUrl || appBaseUrl).replace(/\/+$/, "");
 }
 
 function getSuperAdminEmails() {
