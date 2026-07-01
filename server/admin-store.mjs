@@ -17,6 +17,8 @@ const COLLECTIONS = {
   transactions: "transactions",
 };
 
+let managedCoursesSeededInProcess = false;
+
 export function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -55,10 +57,15 @@ function fallbackCourseDocument(course, index) {
 }
 
 export async function ensureManagedCoursesSeeded() {
+  if (managedCoursesSeededInProcess) {
+    return;
+  }
+
   const firestore = firestoreRequired();
   const snapshot = await firestore.collection(COLLECTIONS.courses).limit(1).get();
 
   if (!snapshot.empty) {
+    managedCoursesSeededInProcess = true;
     return;
   }
 
@@ -70,6 +77,7 @@ export async function ensureManagedCoursesSeeded() {
   });
 
   await batch.commit();
+  managedCoursesSeededInProcess = true;
 }
 
 export async function listManagedCourses() {
@@ -215,6 +223,31 @@ export async function recordAuditLog({ actorEmail, actorRole, action, entityType
     metadata: metadata || {},
     createdAt: new Date().toISOString(),
   });
+}
+
+export async function recordAuditLogsBatch(entries = []) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return 0;
+  }
+
+  const firestore = firestoreRequired();
+  const batch = firestore.batch();
+
+  entries.forEach((entry) => {
+    const ref = firestore.collection(COLLECTIONS.auditLogs).doc();
+    batch.set(ref, {
+      actorEmail: entry.actorEmail || "",
+      actorRole: entry.actorRole || "",
+      action: entry.action || "",
+      entityType: entry.entityType || "",
+      entityId: entry.entityId || "",
+      metadata: entry.metadata || {},
+      createdAt: entry.createdAt || new Date().toISOString(),
+    });
+  });
+
+  await batch.commit();
+  return entries.length;
 }
 
 export async function listAuditLogs(limit = 100) {

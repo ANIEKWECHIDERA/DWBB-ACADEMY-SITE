@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { Upload } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs } from "@/components/ui/tabs";
 import { AdminFilterCombobox } from "@/features/admin/components/AdminFilterCombobox";
@@ -24,6 +26,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 export function AdminLogsSection({
   auditLogs,
   loginLogs,
+  onSyncAuditLogs,
+  pendingAuditLogCount,
   range,
   setRange,
   userFilter,
@@ -32,6 +36,8 @@ export function AdminLogsSection({
 }: {
   auditLogs: AuditLogItem[];
   loginLogs: LoginLogItem[];
+  onSyncAuditLogs: () => Promise<void>;
+  pendingAuditLogCount: number;
   range: AdminRange;
   setRange: (range: AdminRange) => void;
   userFilter: string;
@@ -65,26 +71,40 @@ export function AdminLogsSection({
   return (
     <div className="space-y-6">
       <AdminPanel className="p-4">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="grid gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Audit Window</p>
-            <AdminFilterCombobox
-              options={adminRanges.map((option) => ({ label: option.label, value: option.value }))}
-              onChange={(value) => setRange(value as AdminRange)}
-              placeholder="Select time range"
-              searchPlaceholder="Filter ranges..."
-              value={range}
-            />
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                {pendingAuditLogCount} pending sync
+              </span>
+            </div>
+            <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={pendingAuditLogCount === 0} onClick={onSyncAuditLogs} variant="ghost">
+              <Upload className="h-4 w-4" />
+              Sync Audit Logs
+            </Button>
           </div>
-          <div className="grid gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">User</p>
-            <AdminFilterCombobox
-              options={userOptions}
-              onChange={setUserFilter}
-              placeholder="Select user"
-              searchPlaceholder="Filter users..."
-              value={userFilter}
-            />
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Audit Window</p>
+              <AdminFilterCombobox
+                options={adminRanges.map((option) => ({ label: option.label, value: option.value }))}
+                onChange={(value) => setRange(value as AdminRange)}
+                placeholder="Select time range"
+                searchPlaceholder="Filter ranges..."
+                value={range}
+              />
+            </div>
+            <div className="grid gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">User</p>
+              <AdminFilterCombobox
+                options={userOptions}
+                onChange={setUserFilter}
+                placeholder="Select user"
+                searchPlaceholder="Filter users..."
+                value={userFilter}
+              />
+            </div>
           </div>
         </div>
       </AdminPanel>

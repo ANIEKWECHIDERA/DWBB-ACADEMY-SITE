@@ -133,7 +133,21 @@ export async function deleteAdminCustomers(user: User, emails: string[]) {
 }
 
 export async function getAdminLogs(user: User, options?: { background?: boolean }) {
-  return adminFetch<{ auditLogs: AuditLogItem[]; loginLogs: LoginLogItem[] }>(user, "/api/admin/audit-logs", undefined, options);
+  return adminFetch<{ auditLogs: AuditLogItem[]; loginLogs: LoginLogItem[]; pendingAuditLogCount: number }>(user, "/api/admin/audit-logs", undefined, options);
+}
+
+export async function syncAdminAuditLogs(user: User) {
+  return adminFetch<{ syncedCount: number; pendingAuditLogCount: number }>(user, "/api/admin/audit-logs/sync", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function loadAdminNotifications(user: User) {
+  return adminFetch<{ notifications: AdminNotification[]; unreadCount: number }>(user, "/api/admin/notifications/load", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 export async function getAdminUsers(user: User, options?: { background?: boolean }) {

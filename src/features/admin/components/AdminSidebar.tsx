@@ -36,6 +36,7 @@ interface AdminSidebarProps {
   mainSections: AdminNavSection[];
   onLogout: () => Promise<void>;
   onMarkAllNotificationsRead: () => Promise<void>;
+  onNotificationsOpen: () => Promise<void> | void;
   mobileSidebarOpen: boolean;
   session: AdminSession;
   setActiveSection: (section: AdminSection) => void;
@@ -53,6 +54,7 @@ export function AdminSidebar({
   mobileSidebarOpen,
   onLogout,
   onMarkAllNotificationsRead,
+  onNotificationsOpen,
   session,
   setActiveSection,
   setMobileSidebarOpen,
@@ -89,6 +91,7 @@ export function AdminSidebar({
           <SidebarAccountPanel
             onLogout={onLogout}
             onMarkAllNotificationsRead={onMarkAllNotificationsRead}
+            onNotificationsOpen={onNotificationsOpen}
             session={session}
             setActiveSection={setActiveSection}
             setSidebarOpen={setSidebarOpen}
@@ -128,6 +131,7 @@ export function AdminSidebar({
             mobile
             onLogout={onLogout}
             onMarkAllNotificationsRead={onMarkAllNotificationsRead}
+            onNotificationsOpen={onNotificationsOpen}
             session={session}
             setActiveSection={setActiveSection}
             setSidebarOpen={setSidebarOpen}
@@ -219,6 +223,7 @@ function SidebarAccountPanel({
   mobile = false,
   onLogout,
   onMarkAllNotificationsRead,
+  onNotificationsOpen,
   session,
   setActiveSection,
   setSidebarOpen,
@@ -228,6 +233,7 @@ function SidebarAccountPanel({
   mobile?: boolean;
   onLogout: () => Promise<void>;
   onMarkAllNotificationsRead: () => Promise<void>;
+  onNotificationsOpen: () => Promise<void> | void;
   session: AdminSession;
   setActiveSection: (section: AdminSection) => void;
   setSidebarOpen: (next: boolean | ((value: boolean) => boolean)) => void;
@@ -237,7 +243,11 @@ function SidebarAccountPanel({
   return (
     <div className={cn("rounded-lg border border-slate-200 bg-slate-50", mobile ? "p-3" : sidebarOpen ? "p-3" : "p-2")}>
       <div className={cn("flex items-center gap-3", !mobile && !sidebarOpen && "justify-center")}>
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(open) => {
+          if (open) {
+            void onNotificationsOpen();
+          }
+        }}>
           <DropdownMenuTrigger asChild>
             {mobile || sidebarOpen ? (
               <button className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left transition-colors hover:bg-white">

@@ -17,13 +17,14 @@ import {
   getAdminCustomers,
   getAdminDashboard,
   getAdminLogs,
-  getAdminNotifications,
   getAdminSession,
   getAdminTransactions,
   getAdminUsers,
+  loadAdminNotifications,
   markAdminNotification,
   markAllAdminNotificationsRead,
   reorderAdminCourses,
+  syncAdminAuditLogs,
   updateAdminCourse,
   updateAdminUser,
   type AdminRange,
@@ -41,8 +42,6 @@ import type {
   LoginLogItem,
   ManagedCourse,
 } from "@/types/admin";
-
-const POLL_INTERVAL_MS = 30000;
 
 function getRangeStart(range: AdminRange) {
   const now = new Date();
@@ -111,8 +110,11 @@ export function useAdminConsole() {
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loginLogs, setLoginLogs] = useState<LoginLogItem[]>([]);
+  const [logsLoaded, setLogsLoaded] = useState(false);
+  const [pendingAuditLogCount, setPendingAuditLogCount] = useState(0);
   const [adminUsers, setAdminUsers] = useState<AdminDirectoryUser[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "super_admin">("admin");
@@ -180,10 +182,9 @@ export function useAdminConsole() {
     }
 
     try {
-      const [dashboardResult, courseResult, notificationResult] = await Promise.all([
+      const [dashboardResult, courseResult] = await Promise.all([
         getAdminDashboard(firebaseUser, overviewRange, { background: silent }),
         getAdminCourses(firebaseUser, { background: silent }),
-        getAdminNotifications(firebaseUser, { background: silent }),
       ]);
 
       const nextSlug = sourceCourseSlug(selectedCourseSlugRef.current, courseResult);
@@ -192,7 +193,6 @@ export function useAdminConsole() {
       setCourses(courseResult);
       setSelectedCourseSlug(nextSlug);
       setCourseDraft(cloneCourseDraft(courseResult.find((course) => course.slug === nextSlug) || null));
-      setNotifications(notificationResult.notifications);
 
       if (session.permissions.canViewTransactions || session.permissions.canViewCustomers) {
         const [transactionResult, customerResult] = await Promise.all([
@@ -206,16 +206,20 @@ export function useAdminConsole() {
         setSelectedCustomers([]);
       }
 
-      if (session.permissions.canViewAuditLogs && !silent) {
-        const logsResult = await getAdminLogs(firebaseUser);
-        setAuditLogs(logsResult.auditLogs);
-        setLoginLogs(logsResult.loginLogs);
+      if (session.permissions.canViewAuditLogs) {
+        setAuditLogs([]);
+        setLoginLogs([]);
+        setLogsLoaded(false);
+        setPendingAuditLogCount(0);
       }
 
-      if (session.permissions.canManageAdmins && !silent) {
-        const users = await getAdminUsers(firebaseUser);
+      if (session.permissions.canManageAdmins) {
+        const users = await getAdminUsers(firebaseUser, { background: silent });
         setAdminUsers(users);
       }
+
+      setNotifications([]);
+      setNotificationsLoaded(false);
     } catch (error) {
       if (!silent) {
         pushToast({
@@ -229,6 +233,42 @@ export function useAdminConsole() {
       }
     }
   }, [firebaseUser, overviewRange, pushToast, session, transactionsRange]);
+
+  const loadNotificationsOnce = useCallback(async () => {
+    if (!firebaseUser || notificationsLoaded) {
+      return;
+    }
+
+    try {
+      const payload = await loadAdminNotifications(firebaseUser);
+      setNotifications(payload.notifications);
+      setNotificationsLoaded(true);
+    } catch (error) {
+      pushToast({
+        title: "Notifications unavailable",
+        description: error instanceof Error ? error.message : "Unable to load notifications right now.",
+      });
+    }
+  }, [firebaseUser, notificationsLoaded, pushToast]);
+
+  const loadLogsOnce = useCallback(async () => {
+    if (!firebaseUser || !session?.permissions.canViewAuditLogs || logsLoaded) {
+      return;
+    }
+
+    try {
+      const logsResult = await getAdminLogs(firebaseUser);
+      setAuditLogs(logsResult.auditLogs);
+      setLoginLogs(logsResult.loginLogs);
+      setPendingAuditLogCount(logsResult.pendingAuditLogCount || 0);
+      setLogsLoaded(true);
+    } catch (error) {
+      pushToast({
+        title: "Audit logs unavailable",
+        description: error instanceof Error ? error.message : "Unable to load audit logs right now.",
+      });
+    }
+  }, [firebaseUser, logsLoaded, pushToast, session?.permissions.canViewAuditLogs]);
 
   useEffect(() => {
     if (!firebaseUser || !session) {
@@ -245,33 +285,14 @@ export function useAdminConsole() {
   }, [firebaseUser, loadAdminData, overviewRange, session, transactionsRange]);
 
   useEffect(() => {
-    if (!firebaseUser || !session) {
-      return;
+    if (activeSection === "notifications") {
+      void loadNotificationsOnce();
     }
 
-    const intervalId = window.setInterval(() => {
-      loadAdminData({ silent: true });
-    }, POLL_INTERVAL_MS);
-
-    const refreshOnVisible = () => {
-      if (document.visibilityState === "visible") {
-        loadAdminData({ silent: true });
-      }
-    };
-
-    const refreshOnFocus = () => {
-      loadAdminData({ silent: true });
-    };
-
-    document.addEventListener("visibilitychange", refreshOnVisible);
-    window.addEventListener("focus", refreshOnFocus);
-
-    return () => {
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", refreshOnVisible);
-      window.removeEventListener("focus", refreshOnFocus);
-    };
-  }, [firebaseUser, loadAdminData, session]);
+    if (activeSection === "logs") {
+      void loadLogsOnce();
+    }
+  }, [activeSection, loadLogsOnce, loadNotificationsOnce]);
 
   const visibleSections = useMemo(() => {
     if (!session) return [];
@@ -488,7 +509,6 @@ export function useAdminConsole() {
         await deleteAdminTransactions(firebaseUser, references);
         setTransactions((current) => current.filter((item) => !references.includes(item.reference)));
         setSelectedTransactions((current) => current.filter((item) => !references.includes(item)));
-        await loadAdminData({ silent: true });
         pushToast({ title: "Transactions deleted", description: `${references.length} transaction record(s) removed.` });
       });
     } catch (error) {
@@ -508,7 +528,6 @@ export function useAdminConsole() {
         await deleteAdminCustomers(firebaseUser, emails);
         setCustomers((current) => current.filter((item) => !emails.includes(item.email)));
         setSelectedCustomers((current) => current.filter((item) => !emails.includes(item)));
-        await loadAdminData({ silent: true });
         pushToast({ title: "Customers deleted", description: `${emails.length} customer record(s) removed.` });
       });
     } catch (error) {
@@ -553,7 +572,13 @@ export function useAdminConsole() {
   }
 
   async function handleMarkAllNotificationsRead() {
-    if (!firebaseUser || unreadNotifications === 0) return;
+    if (!firebaseUser) return;
+
+    if (!notificationsLoaded) {
+      await loadNotificationsOnce();
+    }
+
+    if (unreadNotifications === 0) return;
 
     try {
       await runBusyAction("Marking notifications as read...", async () => {
@@ -564,6 +589,34 @@ export function useAdminConsole() {
       pushToast({
         title: "Update failed",
         description: error instanceof Error ? error.message : "Unable to mark all notifications as read.",
+      });
+    }
+  }
+
+  async function handleSyncAuditLogs() {
+    if (!firebaseUser) {
+      return;
+    }
+
+    try {
+      await runBusyAction("Syncing audit logs...", async () => {
+        const payload = await syncAdminAuditLogs(firebaseUser);
+        setPendingAuditLogCount(payload.pendingAuditLogCount || 0);
+        setLogsLoaded(false);
+        const logsResult = await getAdminLogs(firebaseUser);
+        setAuditLogs(logsResult.auditLogs);
+        setLoginLogs(logsResult.loginLogs);
+        setPendingAuditLogCount(logsResult.pendingAuditLogCount || 0);
+        setLogsLoaded(true);
+        pushToast({
+          title: "Audit logs synced",
+          description: `${payload.syncedCount} queued audit log${payload.syncedCount === 1 ? "" : "s"} pushed to Firestore.`,
+        });
+      });
+    } catch (error) {
+      pushToast({
+        title: "Audit sync failed",
+        description: error instanceof Error ? error.message : "Unable to sync audit logs right now.",
       });
     }
   }
@@ -626,8 +679,13 @@ export function useAdminConsole() {
     pricingPreview,
     inviteEmailValid,
     unreadNotifications,
+    notificationsLoaded,
+    logsLoaded,
+    pendingAuditLogCount,
     toggleSelection,
     selectCourse,
+    loadNotificationsOnce,
+    handleSyncAuditLogs,
     handleGoogleSignIn,
     handleSaveCourse,
     handleDeleteCourse,

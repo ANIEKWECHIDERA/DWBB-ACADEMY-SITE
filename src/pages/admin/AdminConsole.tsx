@@ -61,6 +61,7 @@ export default function AdminConsole() {
           mobileSidebarOpen={admin.mobileSidebarOpen}
           onLogout={admin.handleLogout}
           onMarkAllNotificationsRead={admin.handleMarkAllNotificationsRead}
+          onNotificationsOpen={admin.loadNotificationsOnce}
           session={admin.session}
           setActiveSection={admin.setActiveSection}
           setMobileSidebarOpen={admin.setMobileSidebarOpen}
@@ -140,6 +141,8 @@ export default function AdminConsole() {
                   <AdminLogsSection
                     auditLogs={admin.auditLogs}
                     loginLogs={admin.loginLogs}
+                    onSyncAuditLogs={admin.handleSyncAuditLogs}
+                    pendingAuditLogCount={admin.pendingAuditLogCount}
                     range={admin.logsRange}
                     setRange={admin.setLogsRange}
                     setUserFilter={admin.setLogsUserFilter}

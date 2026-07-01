@@ -27,7 +27,7 @@ import {
   mirrorVerifiedPurchase,
   normalizeEmail,
   recordAdminLogin,
-  recordAuditLog,
+  recordAuditLogsBatch,
   reorderManagedCourses,
   updateNotificationStatus,
   updateManagedCourse,
@@ -58,6 +58,13 @@ const attemptsFile = path.join(dataDir, "payment-attempts.json");
 const webhookEventsFile = path.join(dataDir, "webhook-events.json");
 const rateLimitStores = new Map();
 const pendingJsonWrites = new Map();
+const adminUserCache = new Map();
+const adminActivityCache = new Map();
+const pendingAuditLogs = [];
+
+const ADMIN_USER_CACHE_TTL_MS = 10 * 60 * 1000;
+const ADMIN_LOGIN_DEDUP_TTL_MS = 6 * 60 * 60 * 1000;
+const ADMIN_VIEW_AUDIT_DEDUP_TTL_MS = 2 * 60 * 1000;
 
 if (trustProxy) {
   const trustProxyValue = Number(trustProxy);
@@ -139,14 +146,6 @@ app.get("/api/admin/session", requireAdminAuth(), async (req, res) => {
   }
 
   await recordAdminLoginSafe(adminUser);
-  await recordAuditLogSafe({
-    actorEmail: adminUser.email,
-    actorRole: adminUser.role,
-    action: "admin.session.viewed",
-    entityType: "session",
-    entityId: adminUser.email,
-    metadata: { uid: adminUser.uid },
-  });
 
   res.json({
     user: adminUser,
@@ -323,6 +322,11 @@ app.get("/api/admin/notifications", requireAdminAuth(), async (req, res) => {
   res.json(payload);
 });
 
+app.post("/api/admin/notifications/load", requireAdminAuth(), async (req, res) => {
+  const payload = await listNotificationsSafe();
+  res.json(payload);
+});
+
 app.patch("/api/admin/notifications/:id", requireAdminAuth(), async (req, res) => {
   const status = req.body?.status;
 
@@ -380,7 +384,39 @@ app.get("/api/admin/audit-logs", requireAdminAuth({ superAdminOnly: true }), asy
       metadata: {},
     });
   }
-  res.json({ auditLogs, loginLogs });
+  res.json({
+    auditLogs: mergeAuditLogsWithPending(auditLogs),
+    loginLogs,
+    pendingAuditLogCount: pendingAuditLogs.length,
+  });
+});
+
+app.post("/api/admin/audit-logs/sync", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
+  if (!isFirebaseAdminConfigured()) {
+    return res.json({ syncedCount: 0, pendingAuditLogCount: pendingAuditLogs.length });
+  }
+
+  if (pendingAuditLogs.length === 0) {
+    return res.json({ syncedCount: 0, pendingAuditLogCount: 0 });
+  }
+
+  const queueSnapshot = pendingAuditLogs.splice(0, pendingAuditLogs.length);
+
+  try {
+    const syncedCount = await recordAuditLogsBatch(queueSnapshot);
+    res.json({ syncedCount, pendingAuditLogCount: pendingAuditLogs.length });
+  } catch (error) {
+    pendingAuditLogs.unshift(...queueSnapshot);
+    logServerError("Audit log sync failed", error);
+
+    if (isFirestoreQuotaError(error)) {
+      return res.status(503).json({
+        error: "Firestore usage is temporarily exhausted. Try syncing audit logs again later.",
+      });
+    }
+
+    res.status(500).json({ error: "Unable to sync audit logs right now." });
+  }
 });
 
 app.get("/api/admin/users", requireAdminAuth({ superAdminOnly: true }), async (_req, res) => {
@@ -402,6 +438,7 @@ app.put("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true }), a
     invitedBy: req.adminUser.email,
     active: req.body?.active !== false,
   });
+  clearCachedAdminUser(email);
 
   await recordAuditLogSafe({
     actorEmail: req.adminUser.email,
@@ -773,6 +810,11 @@ function requireAdminAuth(options = {}) {
       next();
     } catch (error) {
       logServerError("Admin authentication failed", error);
+      if (isFirestoreQuotaError(error)) {
+        return res.status(503).json({
+          error: "Firestore usage is temporarily exhausted. The admin console will be available again once quota resets or billing is increased.",
+        });
+      }
       res.status(401).json({ error: "Unable to authenticate this admin session." });
     }
   };
@@ -944,6 +986,43 @@ function shouldSkipAdminAuditLog(req) {
   return req.headers["x-admin-background-refresh"] === "1";
 }
 
+function readCachedAdminUser(email) {
+  const cacheEntry = adminUserCache.get(email);
+  if (!cacheEntry) {
+    return null;
+  }
+
+  if (cacheEntry.expiresAt <= Date.now()) {
+    adminUserCache.delete(email);
+    return null;
+  }
+
+  return cacheEntry.value;
+}
+
+function writeCachedAdminUser(email, adminUser) {
+  adminUserCache.set(email, {
+    value: adminUser,
+    expiresAt: Date.now() + ADMIN_USER_CACHE_TTL_MS,
+  });
+}
+
+function clearCachedAdminUser(email) {
+  adminUserCache.delete(normalizeEmail(email));
+}
+
+function shouldSkipAdminActivity(key, ttlMs) {
+  const now = Date.now();
+  const cacheEntry = adminActivityCache.get(key);
+
+  if (cacheEntry && cacheEntry > now) {
+    return true;
+  }
+
+  adminActivityCache.set(key, now + ttlMs);
+  return false;
+}
+
 function getSuperAdminEmails() {
   return String(process.env.SUPER_ADMIN_EMAILS || "")
     .split(",")
@@ -955,15 +1034,6 @@ async function resolveAdminUser(email, uid) {
   const superAdminEmails = getSuperAdminEmails();
 
   if (superAdminEmails.includes(email)) {
-    if (isFirebaseAdminConfigured()) {
-      await upsertAdminUser({
-        email,
-        role: "super_admin",
-        invitedBy: email,
-        active: true,
-      });
-    }
-
     return {
       email,
       uid,
@@ -976,7 +1046,14 @@ async function resolveAdminUser(email, uid) {
     return null;
   }
 
-  return getAdminUserByEmail(email);
+  const cachedAdminUser = readCachedAdminUser(email);
+  if (cachedAdminUser) {
+    return cachedAdminUser;
+  }
+
+  const adminUser = await getAdminUserByEmail(email);
+  writeCachedAdminUser(email, adminUser);
+  return adminUser;
 }
 
 async function loadManagedCoursesForPublic() {
@@ -1073,15 +1150,34 @@ async function recordAdminLoginSafe(adminUser) {
     return;
   }
 
+  if (shouldSkipAdminActivity(`login:${adminUser.uid || adminUser.email}`, ADMIN_LOGIN_DEDUP_TTL_MS)) {
+    return;
+  }
+
   await recordAdminLogin(adminUser);
 }
 
 async function recordAuditLogSafe(payload) {
-  if (!isFirebaseAdminConfigured()) {
+  if (
+    String(payload?.action || "").endsWith(".viewed") &&
+    shouldSkipAdminActivity(
+      `audit:${payload.actorEmail || "system"}:${payload.action}:${payload.entityType}:${payload.entityId}`,
+      ADMIN_VIEW_AUDIT_DEDUP_TTL_MS,
+    )
+  ) {
     return;
   }
 
-  await recordAuditLog(payload);
+  pendingAuditLogs.unshift({
+    actorEmail: payload.actorEmail || "",
+    actorRole: payload.actorRole || "",
+    action: payload.action || "",
+    entityType: payload.entityType || "",
+    entityId: payload.entityId || "",
+    metadata: payload.metadata || {},
+    createdAt: new Date().toISOString(),
+    source: "memory",
+  });
 }
 
 async function listAuditLogsSafe() {
@@ -1114,6 +1210,12 @@ async function listNotificationsSafe() {
   }
 
   return listNotifications();
+}
+
+function mergeAuditLogsWithPending(persistedLogs = []) {
+  return [...pendingAuditLogs, ...persistedLogs]
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, 100);
 }
 
 async function mirrorPurchaseSafe(payload) {
@@ -1287,6 +1389,18 @@ function logServerError(context, error) {
   }
 
   console.error(`${context}:`, error);
+}
+
+function isFirestoreQuotaError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+
+  return (
+    code === "8" ||
+    code.toUpperCase() === "RESOURCE_EXHAUSTED" ||
+    message.includes("RESOURCE_EXHAUSTED") ||
+    message.toLowerCase().includes("quota exceeded")
+  );
 }
 
 async function ensureJsonArrayFile(filePath) {
