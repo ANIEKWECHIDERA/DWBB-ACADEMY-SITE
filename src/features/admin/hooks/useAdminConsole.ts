@@ -388,7 +388,7 @@ export function useAdminConsole() {
   }
 
   async function handleSaveCourse() {
-    if (!firebaseUser || !courseDraft) return;
+    if (!firebaseUser || !courseDraft) return false;
 
     try {
       await runBusyAction("Saving course...", async () => {
@@ -401,11 +401,13 @@ export function useAdminConsole() {
         selectCourse(course.slug, nextCourses);
         pushToast({ title: "Course saved", description: `${course.title} was updated successfully.` });
       });
+      return true;
     } catch (error) {
       pushToast({
         title: "Save failed",
         description: error instanceof Error ? error.message : "Unable to save the course right now.",
       });
+      return false;
     }
   }
 

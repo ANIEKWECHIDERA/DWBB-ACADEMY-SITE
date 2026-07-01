@@ -52,7 +52,7 @@ export default function AdminConsole() {
 
   return (
     <SidebarProvider className="h-screen overflow-hidden bg-slate-100" onOpenChange={admin.setSidebarOpen} open={admin.sidebarOpen}>
-      <div className="mx-auto flex h-screen max-w-[1600px] overflow-hidden">
+      <div className="flex h-screen w-full overflow-hidden">
         <AdminSidebar
           activeSection={admin.activeSection}
           commerceSections={admin.commerceSections}

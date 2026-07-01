@@ -57,6 +57,7 @@ const purchasesFile = path.join(dataDir, "purchases.json");
 const attemptsFile = path.join(dataDir, "payment-attempts.json");
 const webhookEventsFile = path.join(dataDir, "webhook-events.json");
 const rateLimitStores = new Map();
+const pendingJsonWrites = new Map();
 
 if (trustProxy) {
   const trustProxyValue = Number(trustProxy);
@@ -613,12 +614,38 @@ async function verifyAndFulfill(reference, options = {}) {
     throw new Error("Payment has not been completed successfully.");
   }
 
-  const expectedAmountKobo = Number(transaction.metadata?.chargedAmountKobo || getCheckoutPricing(course.priceNaira).totalChargeKobo);
-  const legacyAmountKobo = course.priceNaira * 100;
+  const amountPaidKobo = Number(transaction.amount || 0);
+  const paystackFeeKobo = Number(transaction.fees || 0);
+  const metadataChargedAmountKobo = parseOptionalAmount(transaction.metadata?.chargedAmountKobo);
+  const metadataTargetAmountKobo = parseOptionalAmount(transaction.metadata?.targetAmountKobo);
+  const metadataProcessingFeeKobo = parseOptionalAmount(transaction.metadata?.processingFeeKobo);
+  const currentCheckoutPricing = getCheckoutPricing(course.priceNaira);
+  const currentAmountCandidates = new Set([currentCheckoutPricing.totalChargeKobo, course.priceNaira * 100]);
+  const recordedAttempt = await findPaymentAttempt(reference);
+  const recordedAttemptAmountKobo = parseOptionalAmount(recordedAttempt?.amount);
+  const recordedAttemptTargetAmountKobo = parseOptionalAmount(recordedAttempt?.targetAmountKobo);
+  const recordedAttemptProcessingFeeKobo = parseOptionalAmount(recordedAttempt?.processingFeeKobo);
 
-  if (Number(transaction.amount) !== expectedAmountKobo && Number(transaction.amount) !== legacyAmountKobo) {
+  if (metadataChargedAmountKobo !== null && amountPaidKobo !== metadataChargedAmountKobo) {
     throw new Error("Payment amount mismatch detected.");
   }
+
+  if (metadataChargedAmountKobo === null && recordedAttemptAmountKobo !== null && amountPaidKobo !== recordedAttemptAmountKobo) {
+    throw new Error("Payment amount mismatch detected.");
+  }
+
+  if (
+    metadataChargedAmountKobo === null &&
+    recordedAttemptAmountKobo === null &&
+    !currentAmountCandidates.has(amountPaidKobo) &&
+    !String(reference).startsWith(`dwbb-${course.slug}-`)
+  ) {
+    throw new Error("Payment amount mismatch detected.");
+  }
+
+  const inferredNetAmountKobo = Math.max(amountPaidKobo - paystackFeeKobo, 0);
+  const targetAmountKobo = metadataTargetAmountKobo ?? recordedAttemptTargetAmountKobo ?? inferredNetAmountKobo;
+  const processingFeeKobo = metadataProcessingFeeKobo ?? recordedAttemptProcessingFeeKobo ?? paystackFeeKobo;
 
   const purchases = await readPurchases();
   const existing = purchases.find((entry) => entry.reference === reference);
@@ -645,10 +672,10 @@ async function verifyAndFulfill(reference, options = {}) {
     email: transaction.customer?.email,
     name: customerName,
     phone: customerPhone,
-    amount: transaction.amount,
-    chargedAmountKobo: Number(transaction.amount),
-    coursePriceKobo: Number(transaction.metadata?.targetAmountKobo || course.priceNaira * 100),
-    processingFeeKobo: Number(transaction.metadata?.processingFeeKobo || Number(transaction.amount) - course.priceNaira * 100),
+    amount: amountPaidKobo,
+    chargedAmountKobo: amountPaidKobo,
+    coursePriceKobo: targetAmountKobo,
+    processingFeeKobo,
     paidAt: new Date().toISOString(),
     downloadToken,
     downloadBaseUrl: publicDownloadBaseUrl,
@@ -898,7 +925,7 @@ function getPublicApiBaseUrl(req) {
     return normalizeApiBaseUrl(publicApiBaseUrl);
   }
 
-  if (trustProxy && (forwardedHost || hostHeader)) {
+  if (trustProxy && (forwardedHost || forwardedProto)) {
     return normalizeApiBaseUrl(`${forwardedProto || "https"}://${forwardedHost || hostHeader}`);
   }
 
@@ -1190,6 +1217,20 @@ async function recordPaymentAttempt(attempt) {
   await writeJsonFile(attemptsFile, attempts);
 }
 
+async function findPaymentAttempt(reference) {
+  if (!enablePaymentDebug || !reference) {
+    return null;
+  }
+
+  const attempts = await readJsonFile(attemptsFile);
+  return attempts.find((attempt) => attempt.reference === reference) || null;
+}
+
+function parseOptionalAmount(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
 async function recordWebhookEvent(payload) {
   if (!enablePaymentDebug) {
     return;
@@ -1258,11 +1299,38 @@ async function ensureJsonArrayFile(filePath) {
 
 async function readJsonFile(filePath) {
   await ensureDataFile();
+  await waitForPendingJsonWrite(filePath);
   const content = await fs.readFile(filePath, "utf8");
   return JSON.parse(content);
 }
 
 async function writeJsonFile(filePath, value) {
   await ensureDataFile();
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
+  const previousWrite = pendingJsonWrites.get(filePath) || Promise.resolve();
+  const nextWrite = previousWrite
+    .catch(() => {})
+    .then(async () => {
+      const tempFilePath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+      await fs.writeFile(tempFilePath, JSON.stringify(value, null, 2), "utf8");
+      await fs.rename(tempFilePath, filePath);
+    });
+
+  pendingJsonWrites.set(filePath, nextWrite);
+
+  try {
+    await nextWrite;
+  } finally {
+    if (pendingJsonWrites.get(filePath) === nextWrite) {
+      pendingJsonWrites.delete(filePath);
+    }
+  }
+}
+
+async function waitForPendingJsonWrite(filePath) {
+  const pendingWrite = pendingJsonWrites.get(filePath);
+  if (!pendingWrite) {
+    return;
+  }
+
+  await pendingWrite.catch(() => {});
 }
