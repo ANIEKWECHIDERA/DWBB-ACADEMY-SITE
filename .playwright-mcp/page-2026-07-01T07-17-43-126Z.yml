@@ -1,0 +1,143 @@
+- generic [ref=f30e9]:
+  - complementary [ref=f30e10]:
+    - generic [ref=f30e12]:
+      - generic [ref=f30e13]:
+        - paragraph [ref=f30e14]: DWBB Academy
+        - heading "Admin Console" [level=1] [ref=f30e15]
+        - paragraph [ref=f30e16]: Courses, inflows, team access, and payment intelligence in one place.
+      - button "Collapse sidebar" [ref=f30e17] [cursor=pointer]:
+        - img [ref=f30e18]
+        - generic [ref=f30e21]: Collapse sidebar
+    - generic [ref=f30e22]:
+      - generic [ref=f30e23]:
+        - paragraph [ref=f30e25]: Main
+        - list [ref=f30e27]:
+          - listitem [ref=f30e28]:
+            - button "Overview" [ref=f30e29] [cursor=pointer]:
+              - img [ref=f30e30]
+              - generic [ref=f30e35]: Overview
+          - listitem [ref=f30e36]:
+            - button "Courses" [active] [ref=f30e37] [cursor=pointer]:
+              - img [ref=f30e38]
+              - generic [ref=f30e42]: Courses
+      - generic [ref=f30e43]:
+        - paragraph [ref=f30e45]: Commerce
+        - list [ref=f30e47]:
+          - listitem [ref=f30e48]:
+            - button "Transactions" [ref=f30e49] [cursor=pointer]:
+              - img [ref=f30e50]
+              - generic [ref=f30e52]: Transactions
+          - listitem [ref=f30e53]:
+            - button "Customers" [ref=f30e54] [cursor=pointer]:
+              - img [ref=f30e55]
+              - generic [ref=f30e60]: Customers
+      - generic [ref=f30e61]:
+        - paragraph [ref=f30e63]: Governance
+        - list [ref=f30e65]:
+          - listitem [ref=f30e66]:
+            - button "Audit Logs" [ref=f30e67] [cursor=pointer]:
+              - img [ref=f30e68]
+              - generic [ref=f30e71]: Audit Logs
+          - listitem [ref=f30e72]:
+            - button "Admins" [ref=f30e73] [cursor=pointer]:
+              - img [ref=f30e74]
+              - generic [ref=f30e77]: Admins
+    - generic [ref=f30e79]:
+      - button "C chideraaniekwederah73@gmail.com super admin" [ref=f30e81] [cursor=pointer]:
+        - generic [ref=f30e82]: C
+        - generic [ref=f30e83]:
+          - paragraph [ref=f30e84]: chideraaniekwederah73@gmail.com
+          - paragraph [ref=f30e85]: super admin
+        - img [ref=f30e86]
+      - generic [ref=f30e90]:
+        - generic [ref=f30e91]: TEST MODE
+        - button "Logout" [ref=f30e92] [cursor=pointer]:
+          - img [ref=f30e93]
+          - text: Logout
+  - generic [ref=f30e96]:
+    - generic [ref=f30e99]:
+      - paragraph [ref=f30e100]: courses
+      - heading "Precision control for DWBB operations" [level=2] [ref=f30e101]
+      - paragraph [ref=f30e102]: Manage pricing as net target values, review inflows, and keep admin activity auditable.
+    - generic [ref=f30e141]:
+      - generic [ref=f30e142]:
+        - generic [ref=f30e144]:
+          - paragraph [ref=f30e145]: Catalog Order
+          - heading "Drag to reorder" [level=3] [ref=f30e146]
+        - generic [ref=f30e147]:
+          - generic [ref=f30e148]:
+            - button "Data Analytics Bootcamp data-analytics ₦250,000 Published" [ref=f30e149] [cursor=pointer]:
+              - generic [ref=f30e150]:
+                - paragraph [ref=f30e151]: Data Analytics Bootcamp
+                - paragraph [ref=f30e152]: data-analytics
+              - generic [ref=f30e153]:
+                - paragraph [ref=f30e154]: ₦250,000
+                - paragraph [ref=f30e155]: Published
+            - button "Web Development Bootcamp web-development ₦350,000 Published" [ref=f30e156] [cursor=pointer]:
+              - generic [ref=f30e157]:
+                - paragraph [ref=f30e158]: Web Development Bootcamp
+                - paragraph [ref=f30e159]: web-development
+              - generic [ref=f30e160]:
+                - paragraph [ref=f30e161]: ₦350,000
+                - paragraph [ref=f30e162]: Published
+            - button "Mobile App Development mobile-app ₦450,000 Published" [ref=f30e163] [cursor=pointer]:
+              - generic [ref=f30e164]:
+                - paragraph [ref=f30e165]: Mobile App Development
+                - paragraph [ref=f30e166]: mobile-app
+              - generic [ref=f30e167]:
+                - paragraph [ref=f30e168]: ₦450,000
+                - paragraph [ref=f30e169]: Published
+            - button "AI & Automation ai-automation ₦180,000 Published" [ref=f30e170] [cursor=pointer]:
+              - generic [ref=f30e171]:
+                - paragraph [ref=f30e172]: AI & Automation
+                - paragraph [ref=f30e173]: ai-automation
+              - generic [ref=f30e174]:
+                - paragraph [ref=f30e175]: ₦180,000
+                - paragraph [ref=f30e176]: Published
+            - button "Machine Learning machine-learning ₦600,000 Published" [ref=f30e177] [cursor=pointer]:
+              - generic [ref=f30e178]:
+                - paragraph [ref=f30e179]: Machine Learning
+                - paragraph [ref=f30e180]: machine-learning
+              - generic [ref=f30e181]:
+                - paragraph [ref=f30e182]: ₦600,000
+                - paragraph [ref=f30e183]: Published
+          - status [ref=f30e184]
+      - generic [ref=f30e186]:
+        - generic [ref=f30e187]:
+          - generic [ref=f30e188]:
+            - generic [ref=f30e189]: Slug
+            - textbox [ref=f30e190]: data-analytics
+          - generic [ref=f30e191]:
+            - generic [ref=f30e192]: Title
+            - textbox [ref=f30e193]: Data Analytics Bootcamp
+        - generic [ref=f30e194]:
+          - generic [ref=f30e195]: Short Title
+          - textbox [ref=f30e196]: Data Analytics
+        - generic [ref=f30e197]:
+          - generic [ref=f30e198]:
+            - generic [ref=f30e199]: Net Price You Want To Receive
+            - spinbutton [ref=f30e200]: "250000"
+          - generic [ref=f30e201]:
+            - generic [ref=f30e202]: Paystack Final Charge Preview
+            - generic [ref=f30e203]:
+              - paragraph [ref=f30e204]: ₦252,000
+              - paragraph [ref=f30e205]: Includes ₦2,000 processing fee
+        - generic [ref=f30e206]:
+          - generic [ref=f30e207]: Summary
+          - textbox [ref=f30e208]
+        - generic [ref=f30e209]:
+          - generic [ref=f30e210]: Long Description
+          - textbox [ref=f30e211]
+        - generic [ref=f30e212]:
+          - generic [ref=f30e213]: Deliverables
+          - textbox [ref=f30e214]: Downloadable lesson guides and templates Practice datasets for portfolio projects Capstone workbook and review checklist
+        - generic [ref=f30e215]:
+          - generic [ref=f30e216]:
+            - generic [ref=f30e217]: Published
+            - checkbox "Published" [checked] [ref=f30e218]
+          - generic [ref=f30e219]:
+            - generic [ref=f30e220]: Featured listing
+            - checkbox "Featured listing" [checked] [ref=f30e221]
+        - generic [ref=f30e222]:
+          - button "Save Course" [ref=f30e223] [cursor=pointer]
+          - button "Hard Delete" [ref=f30e224] [cursor=pointer]

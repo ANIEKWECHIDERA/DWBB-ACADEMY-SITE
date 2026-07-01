@@ -1,18 +1,7 @@
 import { Slot } from "@radix-ui/react-slot";
 import { cva } from "class-variance-authority";
-import {
-  MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
-import {
-  createContext,
-  useContext,
-  useState,
-  type ButtonHTMLAttributes,
-  type HTMLAttributes,
-  type ReactNode,
-} from "react";
+import { MoreHorizontal, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { createContext, useContext, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -128,7 +117,7 @@ export function SidebarHeader({ className, ...props }: HTMLAttributes<HTMLDivEle
 
 export function SidebarContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   const { open } = useSidebar();
-  return <div className={cn("flex flex-1 flex-col gap-6 overflow-y-auto py-6", open ? "px-4" : "px-2", className)} {...props} />;
+  return <div className={cn("flex flex-1 flex-col py-6", open ? "gap-6 px-4" : "gap-0 px-2", className)} {...props} />;
 }
 
 export function SidebarFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -141,7 +130,8 @@ export function SidebarInset({ className, ...props }: HTMLAttributes<HTMLDivElem
 }
 
 export function SidebarGroup({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("space-y-3", className)} {...props} />;
+  const { open } = useSidebar();
+  return <div className={cn(open ? "space-y-3" : "space-y-0", className)} {...props} />;
 }
 
 export function SidebarGroupHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

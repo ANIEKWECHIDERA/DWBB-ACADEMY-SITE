@@ -11,8 +11,31 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = initializeApp(firebaseConfig);
-export const firebaseAuth = getAuth(app);
+const requiredFirebaseKeys = [
+  firebaseConfig.apiKey,
+  firebaseConfig.authDomain,
+  firebaseConfig.projectId,
+  firebaseConfig.appId,
+];
+
+export const firebaseEnabled = requiredFirebaseKeys.every((value) => String(value || "").trim().length > 0);
+
+let firebaseAuthInstance = null;
+let firebaseInitializationError = "";
+
+try {
+  if (firebaseEnabled) {
+    const app = initializeApp(firebaseConfig);
+    firebaseAuthInstance = getAuth(app);
+  } else {
+    firebaseInitializationError = "Firebase web configuration is incomplete.";
+  }
+} catch (error) {
+  firebaseInitializationError = error instanceof Error ? error.message : "Firebase could not be initialized.";
+}
+
+export const firebaseAuth = firebaseAuthInstance;
+export const firebaseInitError = firebaseInitializationError;
 export const googleProvider = new GoogleAuthProvider();
 
 googleProvider.setCustomParameters({

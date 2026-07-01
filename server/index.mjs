@@ -760,6 +760,45 @@ function parseAllowedOrigins(value) {
     .filter(Boolean);
 }
 
+function parseOriginValue(origin) {
+  try {
+    return new URL(origin);
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHostname(hostname) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
+}
+
+function originsMatch(candidate, trusted) {
+  if (candidate === trusted) {
+    return true;
+  }
+
+  const candidateUrl = parseOriginValue(candidate);
+  const trustedUrl = parseOriginValue(trusted);
+
+  if (!candidateUrl || !trustedUrl) {
+    return false;
+  }
+
+  if (candidateUrl.protocol !== trustedUrl.protocol) {
+    return false;
+  }
+
+  if (candidateUrl.port !== trustedUrl.port) {
+    return false;
+  }
+
+  if (candidateUrl.hostname === trustedUrl.hostname) {
+    return true;
+  }
+
+  return isLoopbackHostname(candidateUrl.hostname) && isLoopbackHostname(trustedUrl.hostname);
+}
+
 function parseDashboardRange(value) {
   if (value === "today" || value === "7d" || value === "30d" || value === "all") {
     return value;
@@ -770,13 +809,15 @@ function parseDashboardRange(value) {
 
 function isAllowedOrigin(origin) {
   if (allowedOrigins.length > 0) {
-    return allowedOrigins.includes(origin);
+    return allowedOrigins.some((allowedOrigin) => originsMatch(origin, allowedOrigin));
   }
 
   if (!isProduction) {
     return (
       origin === "http://localhost:5173" ||
+      origin === "http://127.0.0.1:5173" ||
       origin === "http://localhost:5174" ||
+      origin === "http://127.0.0.1:5174" ||
       origin.endsWith(".ngrok-free.app")
     );
   }
