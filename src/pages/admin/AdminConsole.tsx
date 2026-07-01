@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
-import { adminRanges } from "@/features/admin/constants";
 import { AdminHeader } from "@/features/admin/components/AdminHeader";
 import { AdminPanel, EmptyState } from "@/features/admin/components/AdminPrimitives";
 import { AdminSidebar } from "@/features/admin/components/AdminSidebar";
@@ -59,101 +58,112 @@ export default function AdminConsole() {
           commerceSections={admin.commerceSections}
           governanceSections={admin.governanceSections}
           mainSections={admin.mainSections}
+          mobileSidebarOpen={admin.mobileSidebarOpen}
           onLogout={admin.handleLogout}
           onMarkAllNotificationsRead={admin.handleMarkAllNotificationsRead}
           session={admin.session}
           setActiveSection={admin.setActiveSection}
+          setMobileSidebarOpen={admin.setMobileSidebarOpen}
           setSidebarOpen={admin.setSidebarOpen}
           sidebarOpen={admin.sidebarOpen}
           unreadNotifications={admin.unreadNotifications}
         />
 
         <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
-          <AdminHeader
-            activeSection={admin.activeSection}
-            mobileSections={admin.visibleSections}
-            onLogout={admin.handleLogout}
-            onSelectRange={admin.setRange}
-            onSelectSection={admin.setActiveSection}
-            range={admin.range}
-            ranges={adminRanges}
-            shouldShowRangeFilter={admin.shouldShowRangeFilter}
-          />
+          <AdminHeader activeSection={admin.activeSection} onOpenMobileSidebar={() => admin.setMobileSidebarOpen(true)} />
 
-          <div className="mt-4 flex-1 overflow-y-auto pb-8 pr-1 sm:mt-6">
-            {admin.loadingData ? (
-              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 text-slate-600">
-                <Spinner className="text-slate-500" />
-                Refreshing admin data...
+          <div className="relative mt-4 flex-1 overflow-hidden sm:mt-6">
+            {admin.isPageBusy ? (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-100/75 backdrop-blur-[1px]">
+                <div className="flex flex-col items-center gap-3 text-center text-slate-600">
+                  <Spinner className="text-slate-500" size="lg" />
+                  <p className="text-sm font-medium">{admin.mutating ? admin.mutationLabel : "Refreshing data..."}</p>
+                </div>
               </div>
             ) : null}
 
-            <div className={admin.loadingData ? "mt-6" : ""}>
-              {admin.activeSection === "overview" ? <AdminOverviewSection dashboard={admin.dashboard} /> : null}
+            <div className="h-full overflow-y-auto pb-8 pr-1">
+              <div className={admin.isPageBusy ? "pointer-events-none select-none" : ""}>
+                {admin.activeSection === "overview" ? (
+                  <AdminOverviewSection dashboard={admin.dashboard} range={admin.overviewRange} setRange={admin.setOverviewRange} />
+                ) : null}
 
-              {admin.activeSection === "courses" ? (
-                <AdminCoursesSection
-                  courseDraft={admin.courseDraft}
-                  courses={admin.courses}
-                  onChangeDraft={admin.setCourseDraft}
-                  onDeleteCourse={admin.handleDeleteCourse}
-                  onDragEnd={admin.handleCourseDragEnd}
-                  onSaveCourse={admin.handleSaveCourse}
-                  pricingPreview={admin.pricingPreview}
-                  selectedCourseSlug={admin.selectedCourseSlug}
-                  selectCourse={admin.selectCourse}
-                />
-              ) : null}
+                {admin.activeSection === "courses" ? (
+                  <AdminCoursesSection
+                    courseDraft={admin.courseDraft}
+                    courses={admin.courses}
+                    onChangeDraft={admin.setCourseDraft}
+                    onDeleteCourse={admin.handleDeleteCourse}
+                    onDragEnd={admin.handleCourseDragEnd}
+                    onSaveCourse={admin.handleSaveCourse}
+                    pricingPreview={admin.pricingPreview}
+                    selectedCourseSlug={admin.selectedCourseSlug}
+                    selectCourse={admin.selectCourse}
+                  />
+                ) : null}
 
-              {admin.activeSection === "notifications" ? (
-                <AdminNotificationsSection
-                  notifications={admin.notifications}
-                  onDismissNotification={admin.handleDismissNotification}
-                  onMarkAllNotificationsRead={admin.handleMarkAllNotificationsRead}
-                  onNotificationStatus={admin.handleNotificationStatus}
-                  session={admin.session}
-                  setActiveSection={() => admin.setActiveSection("transactions")}
-                  unreadNotifications={admin.unreadNotifications}
-                />
-              ) : null}
+                {admin.activeSection === "notifications" ? (
+                  <AdminNotificationsSection
+                    notifications={admin.notifications}
+                    onDismissNotification={admin.handleDismissNotification}
+                    onMarkAllNotificationsRead={admin.handleMarkAllNotificationsRead}
+                    onNotificationStatus={admin.handleNotificationStatus}
+                    session={admin.session}
+                    setActiveSection={() => admin.setActiveSection("transactions")}
+                    unreadNotifications={admin.unreadNotifications}
+                  />
+                ) : null}
 
-              {admin.activeSection === "transactions" ? (
-                <AdminTransactionsSection
-                  onDeleteTransactions={admin.handleDeleteTransactions}
-                  selectedTransactions={admin.selectedTransactions}
-                  setSelectedTransactions={admin.setSelectedTransactions}
-                  toggleSelection={admin.toggleSelection}
-                  transactions={admin.transactions}
-                />
-              ) : null}
+                {admin.activeSection === "transactions" ? (
+                  <AdminTransactionsSection
+                    onDeleteTransactions={admin.handleDeleteTransactions}
+                    onRangeChange={admin.setTransactionsRange}
+                    range={admin.transactionsRange}
+                    selectedTransactions={admin.selectedTransactions}
+                    setSelectedTransactions={admin.setSelectedTransactions}
+                    toggleSelection={admin.toggleSelection}
+                    transactions={admin.transactions}
+                  />
+                ) : null}
 
-              {admin.activeSection === "customers" ? (
-                <AdminCustomersSection
-                  customers={admin.customers}
-                  onDeleteCustomers={admin.handleDeleteCustomers}
-                  selectedCustomers={admin.selectedCustomers}
-                  setSelectedCustomers={admin.setSelectedCustomers}
-                  toggleSelection={admin.toggleSelection}
-                />
-              ) : null}
+                {admin.activeSection === "customers" ? (
+                  <AdminCustomersSection
+                    customers={admin.customers}
+                    onDeleteCustomers={admin.handleDeleteCustomers}
+                    selectedCustomers={admin.selectedCustomers}
+                    setSelectedCustomers={admin.setSelectedCustomers}
+                    toggleSelection={admin.toggleSelection}
+                  />
+                ) : null}
 
-              {admin.activeSection === "logs" ? <AdminLogsSection auditLogs={admin.auditLogs} loginLogs={admin.loginLogs} /> : null}
+                {admin.activeSection === "logs" ? (
+                  <AdminLogsSection
+                    auditLogs={admin.auditLogs}
+                    loginLogs={admin.loginLogs}
+                    range={admin.logsRange}
+                    setRange={admin.setLogsRange}
+                    setUserFilter={admin.setLogsUserFilter}
+                    userFilter={admin.logsUserFilter}
+                    userOptions={admin.logUserOptions}
+                  />
+                ) : null}
 
-              {admin.activeSection === "admins" ? (
-                <AdminAdminsSection
-                  adminUsers={admin.adminUsers}
-                  inviteEmail={admin.inviteEmail}
-                  inviteEmailValid={admin.inviteEmailValid}
-                  inviteRole={admin.inviteRole}
-                  onInviteAdmin={admin.handleInviteAdmin}
-                  setInviteEmail={admin.setInviteEmail}
-                  setInviteRole={admin.setInviteRole}
-                />
-              ) : null}
+                {admin.activeSection === "admins" ? (
+                  <AdminAdminsSection
+                    adminUsers={admin.adminUsers}
+                    inviteEmail={admin.inviteEmail}
+                    inviteEmailValid={admin.inviteEmailValid}
+                    inviteRole={admin.inviteRole}
+                    onInviteAdmin={admin.handleInviteAdmin}
+                    setInviteEmail={admin.setInviteEmail}
+                    setInviteRole={admin.setInviteRole}
+                  />
+                ) : null}
 
-              {!["overview", "courses", "notifications", "transactions", "customers", "logs", "admins"].includes(admin.activeSection) ? (
-                <EmptyState title="Section unavailable" description="This admin section is not available right now." />
-              ) : null}
+                {!["overview", "courses", "notifications", "transactions", "customers", "logs", "admins"].includes(admin.activeSection) ? (
+                  <EmptyState title="Section unavailable" description="This admin section is not available right now." />
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

@@ -15,13 +15,14 @@ import type {
 
 type AdminRange = "today" | "7d" | "30d" | "all";
 
-async function adminFetch<T>(user: User, path: string, init?: RequestInit): Promise<T> {
+async function adminFetch<T>(user: User, path: string, init?: RequestInit, options?: { background?: boolean }): Promise<T> {
   const token = await user.getIdToken();
   const response = await fetch(apiUrl(path), {
     ...init,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      ...(options?.background ? { "X-Admin-Background-Refresh": "1" } : {}),
       ...(init?.headers || {}),
     },
   });
@@ -38,17 +39,19 @@ export function getAdminSession(user: User) {
   return adminFetch<AdminSession>(user, "/api/admin/session");
 }
 
-export async function getAdminDashboard(user: User, range: AdminRange) {
+export async function getAdminDashboard(user: User, range: AdminRange, options?: { background?: boolean }) {
   const payload = await adminFetch<{ mode: "test" | "live"; range: AdminRange; metrics: AdminDashboardMetrics }>(
     user,
     `/api/admin/dashboard?range=${range}`,
+    undefined,
+    options,
   );
 
   return payload;
 }
 
-export async function getAdminCourses(user: User) {
-  const payload = await adminFetch<{ courses: ManagedCourse[] }>(user, "/api/admin/courses");
+export async function getAdminCourses(user: User, options?: { background?: boolean }) {
+  const payload = await adminFetch<{ courses: ManagedCourse[] }>(user, "/api/admin/courses", undefined, options);
   return payload.courses;
 }
 
@@ -85,13 +88,13 @@ export async function deleteAdminCourse(user: User, slug: string) {
   }
 }
 
-export async function getAdminTransactions(user: User, range: AdminRange) {
-  const payload = await adminFetch<{ transactions: AdminTransaction[] }>(user, `/api/admin/transactions?range=${range}`);
+export async function getAdminTransactions(user: User, range: AdminRange, options?: { background?: boolean }) {
+  const payload = await adminFetch<{ transactions: AdminTransaction[] }>(user, `/api/admin/transactions?range=${range}`, undefined, options);
   return payload.transactions;
 }
 
-export async function getAdminCustomers(user: User, range: AdminRange) {
-  const payload = await adminFetch<{ customers: AdminCustomer[] }>(user, `/api/admin/customers?range=${range}`);
+export async function getAdminCustomers(user: User, range: AdminRange, options?: { background?: boolean }) {
+  const payload = await adminFetch<{ customers: AdminCustomer[] }>(user, `/api/admin/customers?range=${range}`, undefined, options);
   return payload.customers;
 }
 
@@ -129,19 +132,21 @@ export async function deleteAdminCustomers(user: User, emails: string[]) {
   }
 }
 
-export async function getAdminLogs(user: User) {
-  return adminFetch<{ auditLogs: AuditLogItem[]; loginLogs: LoginLogItem[] }>(user, "/api/admin/audit-logs");
+export async function getAdminLogs(user: User, options?: { background?: boolean }) {
+  return adminFetch<{ auditLogs: AuditLogItem[]; loginLogs: LoginLogItem[] }>(user, "/api/admin/audit-logs", undefined, options);
 }
 
-export async function getAdminUsers(user: User) {
-  const payload = await adminFetch<{ users: AdminDirectoryUser[] }>(user, "/api/admin/users");
+export async function getAdminUsers(user: User, options?: { background?: boolean }) {
+  const payload = await adminFetch<{ users: AdminDirectoryUser[] }>(user, "/api/admin/users", undefined, options);
   return payload.users;
 }
 
-export async function getAdminNotifications(user: User) {
+export async function getAdminNotifications(user: User, options?: { background?: boolean }) {
   const payload = await adminFetch<{ notifications: AdminNotification[]; unreadCount: number }>(
     user,
     "/api/admin/notifications",
+    undefined,
+    options,
   );
   return payload;
 }

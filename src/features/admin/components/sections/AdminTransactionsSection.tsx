@@ -2,7 +2,10 @@ import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AdminFilterCombobox } from "@/features/admin/components/AdminFilterCombobox";
+import { adminRanges } from "@/features/admin/constants";
 import { cn } from "@/lib/utils";
+import type { AdminRange } from "@/lib/admin-api";
 import type { AdminTransaction } from "@/types/admin";
 import { formatCurrencyFromKobo, formatDate, statusTone } from "@/features/admin/utils";
 
@@ -10,12 +13,16 @@ import { AdminPanel, EmptyState } from "../AdminPrimitives";
 
 export function AdminTransactionsSection({
   onDeleteTransactions,
+  onRangeChange,
+  range,
   selectedTransactions,
   setSelectedTransactions,
   toggleSelection,
   transactions,
 }: {
   onDeleteTransactions: (references: string[]) => Promise<void>;
+  onRangeChange: (range: AdminRange) => void;
+  range: AdminRange;
   selectedTransactions: string[];
   setSelectedTransactions: (value: string[] | ((current: string[]) => string[])) => void;
   toggleSelection: (current: string[], value: string) => string[];
@@ -28,9 +35,18 @@ export function AdminTransactionsSection({
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Transaction Ledger</p>
           <h3 className="mt-2 text-2xl font-bold text-slate-950">Verified payment records</h3>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="w-full sm:w-56">
+            <AdminFilterCombobox
+              options={adminRanges.map((option) => ({ label: option.label, value: option.value }))}
+              onChange={(value) => onRangeChange(value as AdminRange)}
+              placeholder="Select time range"
+              searchPlaceholder="Filter ranges..."
+              value={range}
+            />
+          </div>
           <Button
-            className="rounded-xl border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0"
+            className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0"
             disabled={selectedTransactions.length === 0}
             onClick={() => onDeleteTransactions(selectedTransactions)}
             variant="ghost"

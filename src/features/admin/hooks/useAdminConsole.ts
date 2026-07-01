@@ -1,9 +1,10 @@
 import type { DragEndEvent } from "@dnd-kit/core";
-import { BookCopy, ClipboardList, CreditCard, LayoutGrid, ShieldCheck, Users } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
 import { arrayMove } from "@dnd-kit/sortable";
+import { BookCopy, ClipboardList, CreditCard, LayoutGrid, ShieldCheck, Users } from "lucide-react";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useToast } from "@/components/ui/toast";
 import { adminEmailPattern } from "@/features/admin/constants";
 import type { AdminNavSection, AdminSection } from "@/features/admin/types";
 import { cloneCourseDraft, sourceCourseSlug } from "@/features/admin/utils";
@@ -29,7 +30,6 @@ import {
 } from "@/lib/admin-api";
 import { firebaseAuth, firebaseEnabled, firebaseInitError, googleProvider } from "@/lib/firebase";
 import { getCheckoutPricing } from "@/lib/paystackPricing";
-import { useToast } from "@/components/ui/toast";
 import type {
   AdminCustomer,
   AdminDashboardMetrics,
@@ -42,6 +42,48 @@ import type {
   ManagedCourse,
 } from "@/types/admin";
 
+const POLL_INTERVAL_MS = 30000;
+
+function getRangeStart(range: AdminRange) {
+  const now = new Date();
+  const start = new Date(now);
+
+  if (range === "today") {
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+
+  if (range === "7d") {
+    start.setDate(start.getDate() - 7);
+    return start;
+  }
+
+  if (range === "30d") {
+    start.setDate(start.getDate() - 30);
+    return start;
+  }
+
+  return null;
+}
+
+function isDateWithinRange(value: string | undefined, range: AdminRange) {
+  if (!value || range === "all") {
+    return true;
+  }
+
+  const rangeStart = getRangeStart(range);
+  if (!rangeStart) {
+    return true;
+  }
+
+  const targetDate = new Date(value);
+  if (Number.isNaN(targetDate.getTime())) {
+    return false;
+  }
+
+  return targetDate >= rangeStart;
+}
+
 export function useAdminConsole() {
   const { pushToast } = useToast();
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
@@ -52,8 +94,13 @@ export function useAdminConsole() {
   );
 
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
-  const [range, setRange] = useState<AdminRange>("30d");
+  const [overviewRange, setOverviewRange] = useState<AdminRange>("30d");
+  const [transactionsRange, setTransactionsRange] = useState<AdminRange>("30d");
+  const [logsRange, setLogsRange] = useState<AdminRange>("30d");
+  const [logsUserFilter, setLogsUserFilter] = useState("all");
   const [loadingData, setLoadingData] = useState(false);
+  const [mutating, setMutating] = useState(false);
+  const [mutationLabel, setMutationLabel] = useState("Applying changes...");
 
   const [dashboard, setDashboard] = useState<AdminDashboardMetrics | null>(null);
   const [courses, setCourses] = useState<ManagedCourse[]>([]);
@@ -70,6 +117,7 @@ export function useAdminConsole() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "super_admin">("admin");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const selectedCourseSlugRef = useRef(selectedCourseSlug);
 
   useEffect(() => {
@@ -105,82 +153,125 @@ export function useAdminConsole() {
   }, []);
 
   useEffect(() => {
+    if (!mobileSidebarOpen) {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    if (!mediaQuery.matches) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileSidebarOpen]);
+
+  const loadAdminData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!firebaseUser || !session) {
       return;
     }
 
-    const currentUser = firebaseUser;
-    const currentSession = session;
-    let active = true;
-
-    async function load() {
+    if (!silent) {
       setLoadingData(true);
-
-      try {
-        const [dashboardResult, courseResult] = await Promise.all([
-          getAdminDashboard(currentUser, range),
-          getAdminCourses(currentUser),
-        ]);
-
-        if (!active) return;
-
-        const nextSlug = sourceCourseSlug(selectedCourseSlugRef.current, courseResult);
-
-        setDashboard(dashboardResult.metrics);
-        setCourses(courseResult);
-        setSelectedCourseSlug(nextSlug);
-        setCourseDraft(cloneCourseDraft(courseResult.find((course) => course.slug === nextSlug) || null));
-
-        const notificationResult = await getAdminNotifications(currentUser);
-        if (!active) return;
-        setNotifications(notificationResult.notifications);
-
-        if (currentSession.permissions.canViewTransactions || currentSession.permissions.canViewCustomers) {
-          const [transactionResult, customerResult] = await Promise.all([
-            currentSession.permissions.canViewTransactions ? getAdminTransactions(currentUser, range) : Promise.resolve([]),
-            currentSession.permissions.canViewCustomers ? getAdminCustomers(currentUser, range) : Promise.resolve([]),
-          ]);
-
-          if (!active) return;
-
-          setTransactions(transactionResult);
-          setCustomers(customerResult);
-          setSelectedTransactions([]);
-          setSelectedCustomers([]);
-        }
-
-        if (currentSession.permissions.canViewAuditLogs) {
-          const logsResult = await getAdminLogs(currentUser);
-          if (!active) return;
-          setAuditLogs(logsResult.auditLogs);
-          setLoginLogs(logsResult.loginLogs);
-        }
-
-        if (currentSession.permissions.canManageAdmins) {
-          const users = await getAdminUsers(currentUser);
-          if (!active) return;
-          setAdminUsers(users);
-        }
-      } catch (error) {
-        if (active) {
-          pushToast({
-            title: "Admin data unavailable",
-            description: error instanceof Error ? error.message : "Unable to load the admin console data.",
-          });
-        }
-      } finally {
-        if (active) {
-          setLoadingData(false);
-        }
-      }
     }
 
-    load();
+    try {
+      const [dashboardResult, courseResult, notificationResult] = await Promise.all([
+        getAdminDashboard(firebaseUser, overviewRange, { background: silent }),
+        getAdminCourses(firebaseUser, { background: silent }),
+        getAdminNotifications(firebaseUser, { background: silent }),
+      ]);
+
+      const nextSlug = sourceCourseSlug(selectedCourseSlugRef.current, courseResult);
+
+      setDashboard(dashboardResult.metrics);
+      setCourses(courseResult);
+      setSelectedCourseSlug(nextSlug);
+      setCourseDraft(cloneCourseDraft(courseResult.find((course) => course.slug === nextSlug) || null));
+      setNotifications(notificationResult.notifications);
+
+      if (session.permissions.canViewTransactions || session.permissions.canViewCustomers) {
+        const [transactionResult, customerResult] = await Promise.all([
+          session.permissions.canViewTransactions ? getAdminTransactions(firebaseUser, transactionsRange, { background: silent }) : Promise.resolve([]),
+          session.permissions.canViewCustomers ? getAdminCustomers(firebaseUser, "all", { background: silent }) : Promise.resolve([]),
+        ]);
+
+        setTransactions(transactionResult);
+        setCustomers(customerResult);
+        setSelectedTransactions([]);
+        setSelectedCustomers([]);
+      }
+
+      if (session.permissions.canViewAuditLogs && !silent) {
+        const logsResult = await getAdminLogs(firebaseUser);
+        setAuditLogs(logsResult.auditLogs);
+        setLoginLogs(logsResult.loginLogs);
+      }
+
+      if (session.permissions.canManageAdmins && !silent) {
+        const users = await getAdminUsers(firebaseUser);
+        setAdminUsers(users);
+      }
+    } catch (error) {
+      if (!silent) {
+        pushToast({
+          title: "Admin data unavailable",
+          description: error instanceof Error ? error.message : "Unable to load the admin console data.",
+        });
+      }
+    } finally {
+      if (!silent) {
+        setLoadingData(false);
+      }
+    }
+  }, [firebaseUser, overviewRange, pushToast, session, transactionsRange]);
+
+  useEffect(() => {
+    if (!firebaseUser || !session) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void loadAdminData({ silent: false });
+    }, 0);
 
     return () => {
-      active = false;
+      window.clearTimeout(timeoutId);
     };
-  }, [firebaseUser, pushToast, range, session]);
+  }, [firebaseUser, loadAdminData, overviewRange, session, transactionsRange]);
+
+  useEffect(() => {
+    if (!firebaseUser || !session) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      loadAdminData({ silent: true });
+    }, POLL_INTERVAL_MS);
+
+    const refreshOnVisible = () => {
+      if (document.visibilityState === "visible") {
+        loadAdminData({ silent: true });
+      }
+    };
+
+    const refreshOnFocus = () => {
+      loadAdminData({ silent: true });
+    };
+
+    document.addEventListener("visibilitychange", refreshOnVisible);
+    window.addEventListener("focus", refreshOnFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshOnVisible);
+      window.removeEventListener("focus", refreshOnFocus);
+    };
+  }, [firebaseUser, loadAdminData, session]);
 
   const visibleSections = useMemo(() => {
     if (!session) return [];
@@ -196,17 +287,85 @@ export function useAdminConsole() {
   }, [session]);
 
   const pricingPreview = courseDraft ? getCheckoutPricing(courseDraft.priceNaira) : null;
-  const shouldShowRangeFilter = activeSection === "overview" || activeSection === "transactions" || activeSection === "logs";
   const inviteEmailValid = adminEmailPattern.test(inviteEmail.trim());
   const mainSections = visibleSections.filter((section) => section.id === "overview" || section.id === "courses");
   const commerceSections = visibleSections.filter((section) => section.id === "transactions" || section.id === "customers");
   const governanceSections = visibleSections.filter((section) => section.id === "logs" || section.id === "admins");
   const unreadNotifications = notifications.filter((item) => !item.readAt).length;
+  const logUserOptions = useMemo(() => {
+    const uniqueEmails = new Set<string>();
+
+    adminUsers.forEach((user) => {
+      if (user.email) uniqueEmails.add(user.email);
+    });
+    auditLogs.forEach((item) => {
+      if (item.actorEmail) uniqueEmails.add(item.actorEmail);
+    });
+    loginLogs.forEach((item) => {
+      if (item.email) uniqueEmails.add(item.email);
+    });
+
+    return [
+      { label: "All users", value: "all" },
+      ...Array.from(uniqueEmails)
+        .sort((a, b) => a.localeCompare(b))
+        .map((email) => ({ label: email, value: email })),
+    ];
+  }, [adminUsers, auditLogs, loginLogs]);
+
+  const filteredAuditLogs = useMemo(
+    () =>
+      auditLogs.filter((item) => {
+        if (!isDateWithinRange(item.createdAt, logsRange)) {
+          return false;
+        }
+
+        if (logsUserFilter !== "all" && item.actorEmail !== logsUserFilter) {
+          return false;
+        }
+
+        return true;
+      }),
+    [auditLogs, logsRange, logsUserFilter],
+  );
+
+  const filteredLoginLogs = useMemo(
+    () =>
+      loginLogs.filter((item) => {
+        if (!isDateWithinRange(item.createdAt, logsRange)) {
+          return false;
+        }
+
+        if (logsUserFilter !== "all" && item.email !== logsUserFilter) {
+          return false;
+        }
+
+        return true;
+      }),
+    [loginLogs, logsRange, logsUserFilter],
+  );
 
   function selectCourse(slug: string, sourceCourses = courses) {
     setSelectedCourseSlug(slug);
     const selected = sourceCourses.find((course) => course.slug === slug) || null;
     setCourseDraft(cloneCourseDraft(selected));
+  }
+
+  function handleSetActiveSection(section: AdminSection) {
+    setActiveSection(section);
+    setMobileSidebarOpen(false);
+  }
+
+  async function runBusyAction<T>(label: string, action: () => Promise<T>) {
+    setMutating(true);
+    setMutationLabel(label);
+
+    try {
+      return await action();
+    } finally {
+      setMutating(false);
+      setMutationLabel("Applying changes...");
+    }
   }
 
   async function handleGoogleSignIn() {
@@ -232,14 +391,16 @@ export function useAdminConsole() {
     if (!firebaseUser || !courseDraft) return;
 
     try {
-      const course = await updateAdminCourse(firebaseUser, selectedCourseSlug, {
-        ...courseDraft,
-        deliverables: courseDraft.deliverables.filter(Boolean),
+      await runBusyAction("Saving course...", async () => {
+        const course = await updateAdminCourse(firebaseUser, selectedCourseSlug, {
+          ...courseDraft,
+          deliverables: courseDraft.deliverables.filter(Boolean),
+        });
+        const nextCourses = courses.map((item) => (item.slug === selectedCourseSlug ? course : item));
+        setCourses(nextCourses);
+        selectCourse(course.slug, nextCourses);
+        pushToast({ title: "Course saved", description: `${course.title} was updated successfully.` });
       });
-      const nextCourses = courses.map((item) => (item.slug === selectedCourseSlug ? course : item));
-      setCourses(nextCourses);
-      selectCourse(course.slug, nextCourses);
-      pushToast({ title: "Course saved", description: `${course.title} was updated successfully.` });
     } catch (error) {
       pushToast({
         title: "Save failed",
@@ -253,11 +414,13 @@ export function useAdminConsole() {
     if (!window.confirm(`Delete ${courseDraft.title}? This action removes it from Firestore.`)) return;
 
     try {
-      await deleteAdminCourse(firebaseUser, courseDraft.slug);
-      const nextCourses = courses.filter((course) => course.slug !== courseDraft.slug);
-      setCourses(nextCourses);
-      selectCourse(nextCourses[0]?.slug || "", nextCourses);
-      pushToast({ title: "Course deleted", description: `${courseDraft.title} was removed from the managed catalog.` });
+      await runBusyAction("Deleting course...", async () => {
+        await deleteAdminCourse(firebaseUser, courseDraft.slug);
+        const nextCourses = courses.filter((course) => course.slug !== courseDraft.slug);
+        setCourses(nextCourses);
+        selectCourse(nextCourses[0]?.slug || "", nextCourses);
+        pushToast({ title: "Course deleted", description: `${courseDraft.title} was removed from the managed catalog.` });
+      });
     } catch (error) {
       pushToast({
         title: "Delete failed",
@@ -292,14 +455,16 @@ export function useAdminConsole() {
     if (!firebaseUser || !inviteEmail.trim()) return;
 
     try {
-      const user = await updateAdminUser(firebaseUser, inviteEmail, inviteRole, true);
-      setAdminUsers((current) => {
-        const filtered = current.filter((item) => item.email !== user.email);
-        return [...filtered, user].sort((a, b) => a.email.localeCompare(b.email));
+      await runBusyAction("Saving admin access...", async () => {
+        const user = await updateAdminUser(firebaseUser, inviteEmail, inviteRole, true);
+        setAdminUsers((current) => {
+          const filtered = current.filter((item) => item.email !== user.email);
+          return [...filtered, user].sort((a, b) => a.email.localeCompare(b.email));
+        });
+        setInviteEmail("");
+        setInviteRole("admin");
+        pushToast({ title: "Admin access updated", description: `${user.email} can now sign in as ${user.role.replace("_", " ")}.` });
       });
-      setInviteEmail("");
-      setInviteRole("admin");
-      pushToast({ title: "Admin access updated", description: `${user.email} can now sign in as ${user.role.replace("_", " ")}.` });
     } catch (error) {
       pushToast({
         title: "Update failed",
@@ -317,10 +482,13 @@ export function useAdminConsole() {
     if (!window.confirm(`Delete ${references.length} transaction record(s)?`)) return;
 
     try {
-      await deleteAdminTransactions(firebaseUser, references);
-      setTransactions((current) => current.filter((item) => !references.includes(item.reference)));
-      setSelectedTransactions((current) => current.filter((item) => !references.includes(item)));
-      pushToast({ title: "Transactions deleted", description: `${references.length} transaction record(s) removed.` });
+      await runBusyAction("Deleting transactions...", async () => {
+        await deleteAdminTransactions(firebaseUser, references);
+        setTransactions((current) => current.filter((item) => !references.includes(item.reference)));
+        setSelectedTransactions((current) => current.filter((item) => !references.includes(item)));
+        await loadAdminData({ silent: true });
+        pushToast({ title: "Transactions deleted", description: `${references.length} transaction record(s) removed.` });
+      });
     } catch (error) {
       pushToast({
         title: "Delete failed",
@@ -334,10 +502,13 @@ export function useAdminConsole() {
     if (!window.confirm(`Delete ${emails.length} customer record(s)?`)) return;
 
     try {
-      await deleteAdminCustomers(firebaseUser, emails);
-      setCustomers((current) => current.filter((item) => !emails.includes(item.email)));
-      setSelectedCustomers((current) => current.filter((item) => !emails.includes(item)));
-      pushToast({ title: "Customers deleted", description: `${emails.length} customer record(s) removed.` });
+      await runBusyAction("Deleting customers...", async () => {
+        await deleteAdminCustomers(firebaseUser, emails);
+        setCustomers((current) => current.filter((item) => !emails.includes(item.email)));
+        setSelectedCustomers((current) => current.filter((item) => !emails.includes(item)));
+        await loadAdminData({ silent: true });
+        pushToast({ title: "Customers deleted", description: `${emails.length} customer record(s) removed.` });
+      });
     } catch (error) {
       pushToast({
         title: "Delete failed",
@@ -350,9 +521,11 @@ export function useAdminConsole() {
     if (!firebaseUser) return;
 
     try {
-      const payload = await markAdminNotification(firebaseUser, notificationId, status);
-      const nextNotification = payload.notification;
-      setNotifications((current) => current.map((item) => (item.id === notificationId && nextNotification ? nextNotification : item)));
+      await runBusyAction("Updating notification...", async () => {
+        const payload = await markAdminNotification(firebaseUser, notificationId, status);
+        const nextNotification = payload.notification;
+        setNotifications((current) => current.map((item) => (item.id === notificationId && nextNotification ? nextNotification : item)));
+      });
     } catch (error) {
       pushToast({
         title: "Notification update failed",
@@ -365,8 +538,10 @@ export function useAdminConsole() {
     if (!firebaseUser) return;
 
     try {
-      await dismissAdminNotification(firebaseUser, notificationId);
-      setNotifications((current) => current.filter((item) => item.id !== notificationId));
+      await runBusyAction("Dismissing notification...", async () => {
+        await dismissAdminNotification(firebaseUser, notificationId);
+        setNotifications((current) => current.filter((item) => item.id !== notificationId));
+      });
     } catch (error) {
       pushToast({
         title: "Dismiss failed",
@@ -379,8 +554,10 @@ export function useAdminConsole() {
     if (!firebaseUser || unreadNotifications === 0) return;
 
     try {
-      await markAllAdminNotificationsRead(firebaseUser);
-      setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+      await runBusyAction("Marking notifications as read...", async () => {
+        await markAllAdminNotificationsRead(firebaseUser);
+        setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+      });
     } catch (error) {
       pushToast({
         title: "Update failed",
@@ -403,10 +580,20 @@ export function useAdminConsole() {
     loadingSession,
     authorizationError,
     activeSection,
-    setActiveSection,
-    range,
-    setRange,
+    setActiveSection: handleSetActiveSection,
+    overviewRange,
+    setOverviewRange,
+    transactionsRange,
+    setTransactionsRange,
+    logsRange,
+    setLogsRange,
+    logsUserFilter,
+    setLogsUserFilter,
+    logUserOptions,
     loadingData,
+    mutating,
+    mutationLabel,
+    isPageBusy: loadingData || mutating,
     dashboard,
     courses,
     selectedCourseSlug,
@@ -419,8 +606,8 @@ export function useAdminConsole() {
     selectedCustomers,
     setSelectedCustomers,
     notifications,
-    auditLogs,
-    loginLogs,
+    auditLogs: filteredAuditLogs,
+    loginLogs: filteredLoginLogs,
     adminUsers,
     inviteEmail,
     setInviteEmail,
@@ -428,12 +615,13 @@ export function useAdminConsole() {
     setInviteRole,
     sidebarOpen,
     setSidebarOpen,
+    mobileSidebarOpen,
+    setMobileSidebarOpen,
     visibleSections,
     mainSections,
     commerceSections,
     governanceSections,
     pricingPreview,
-    shouldShowRangeFilter,
     inviteEmailValid,
     unreadNotifications,
     toggleSelection,

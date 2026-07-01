@@ -1,11 +1,55 @@
+import { AdminFilterCombobox } from "@/features/admin/components/AdminFilterCombobox";
+import { adminRanges } from "@/features/admin/constants";
+import type { AdminRange } from "@/lib/admin-api";
 import type { AuditLogItem, LoginLogItem } from "@/types/admin";
 import { formatDate } from "@/features/admin/utils";
 
 import { AdminPanel, EmptyState } from "../AdminPrimitives";
 
-export function AdminLogsSection({ auditLogs, loginLogs }: { auditLogs: AuditLogItem[]; loginLogs: LoginLogItem[] }) {
+export function AdminLogsSection({
+  auditLogs,
+  loginLogs,
+  range,
+  setRange,
+  userFilter,
+  userOptions,
+  setUserFilter,
+}: {
+  auditLogs: AuditLogItem[];
+  loginLogs: LoginLogItem[];
+  range: AdminRange;
+  setRange: (range: AdminRange) => void;
+  userFilter: string;
+  userOptions: Array<{ label: string; value: string }>;
+  setUserFilter: (value: string) => void;
+}) {
   return (
     <div className="space-y-6">
+      <AdminPanel className="p-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Audit Window</p>
+            <AdminFilterCombobox
+              options={adminRanges.map((option) => ({ label: option.label, value: option.value }))}
+              onChange={(value) => setRange(value as AdminRange)}
+              placeholder="Select time range"
+              searchPlaceholder="Filter ranges..."
+              value={range}
+            />
+          </div>
+          <div className="grid gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">User</p>
+            <AdminFilterCombobox
+              options={userOptions}
+              onChange={setUserFilter}
+              placeholder="Select user"
+              searchPlaceholder="Filter users..."
+              value={userFilter}
+            />
+          </div>
+        </div>
+      </AdminPanel>
+
       {auditLogs.length === 0 && loginLogs.length === 0 ? (
         <EmptyState title="No audit activity yet" description="Admin session views, finance access, and sign-ins will appear here once the team starts using the console." />
       ) : (

@@ -1,13 +1,37 @@
+import { adminRanges } from "@/features/admin/constants";
+import { AdminFilterCombobox } from "@/features/admin/components/AdminFilterCombobox";
 import { Activity, BarChart3, BookCopy, CreditCard } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { MetricCard, EmptyState, AdminPanel } from "@/features/admin/components/AdminPrimitives";
+import type { AdminRange } from "@/lib/admin-api";
 import { formatCurrencyFromKobo } from "@/features/admin/utils";
 import type { AdminDashboardMetrics } from "@/types/admin";
 
-export function AdminOverviewSection({ dashboard }: { dashboard: AdminDashboardMetrics | null }) {
+export function AdminOverviewSection({
+  dashboard,
+  range,
+  setRange,
+}: {
+  dashboard: AdminDashboardMetrics | null;
+  range: AdminRange;
+  setRange: (range: AdminRange) => void;
+}) {
   return (
     <div className="space-y-6">
+      <AdminPanel className="p-4">
+        <div className="grid gap-3 sm:max-w-xs">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Overview Window</p>
+          <AdminFilterCombobox
+            options={adminRanges.map((option) => ({ label: option.label, value: option.value }))}
+            onChange={(value) => setRange(value as AdminRange)}
+            placeholder="Select time range"
+            searchPlaceholder="Filter ranges..."
+            value={range}
+          />
+        </div>
+      </AdminPanel>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={Activity} label="Gross Sales" value={formatCurrencyFromKobo(dashboard?.grossSalesKobo || 0)} />
         <MetricCard icon={BarChart3} label="Net Inflow" value={formatCurrencyFromKobo(dashboard?.netInflowKobo || 0)} />

@@ -164,6 +164,16 @@ app.get("/api/admin/session", requireAdminAuth(), async (req, res) => {
 app.get("/api/admin/dashboard", requireAdminAuth(), async (req, res) => {
   const range = parseDashboardRange(req.query.range);
   const metrics = await getDashboardMetrics(range);
+  if (!shouldSkipAdminAuditLog(req)) {
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "dashboard.viewed",
+      entityType: "dashboard",
+      entityId: "overview",
+      metadata: { range },
+    });
+  }
   res.json({
     mode: getPaystackMode(),
     range,
@@ -230,14 +240,16 @@ app.delete("/api/admin/courses/:slug", requireAdminAuth(), async (req, res) => {
 app.get("/api/admin/transactions", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
   const range = parseDashboardRange(req.query.range);
   const transactions = await listTransactions(range);
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "transactions.viewed",
-    entityType: "transaction",
-    entityId: "collection",
-    metadata: { range },
-  });
+  if (!shouldSkipAdminAuditLog(req)) {
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "transactions.viewed",
+      entityType: "transaction",
+      entityId: "collection",
+      metadata: { range },
+    });
+  }
   res.json({ transactions });
 });
 
@@ -263,14 +275,16 @@ app.delete("/api/admin/transactions", requireAdminAuth({ superAdminOnly: true })
 app.get("/api/admin/customers", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
   const range = parseDashboardRange(req.query.range);
   const customers = await listCustomers(range);
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "customers.viewed",
-    entityType: "customer",
-    entityId: "collection",
-    metadata: { range },
-  });
+  if (!shouldSkipAdminAuditLog(req)) {
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "customers.viewed",
+      entityType: "customer",
+      entityId: "collection",
+      metadata: { range },
+    });
+  }
   res.json({ customers });
 });
 
@@ -295,14 +309,16 @@ app.delete("/api/admin/customers", requireAdminAuth({ superAdminOnly: true }), a
 
 app.get("/api/admin/notifications", requireAdminAuth(), async (req, res) => {
   const payload = await listNotificationsSafe();
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "notifications.viewed",
-    entityType: "notification",
-    entityId: "collection",
-    metadata: {},
-  });
+  if (!shouldSkipAdminAuditLog(req)) {
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "notifications.viewed",
+      entityType: "notification",
+      entityId: "collection",
+      metadata: {},
+    });
+  }
   res.json(payload);
 });
 
@@ -351,8 +367,18 @@ app.delete("/api/admin/notifications/:id", requireAdminAuth(), async (req, res) 
   res.status(204).end();
 });
 
-app.get("/api/admin/audit-logs", requireAdminAuth({ superAdminOnly: true }), async (_req, res) => {
+app.get("/api/admin/audit-logs", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
   const [auditLogs, loginLogs] = await Promise.all([listAuditLogsSafe(), listLoginLogsSafe()]);
+  if (!shouldSkipAdminAuditLog(req)) {
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "audit_logs.viewed",
+      entityType: "audit_log",
+      entityId: "collection",
+      metadata: {},
+    });
+  }
   res.json({ auditLogs, loginLogs });
 });
 
@@ -885,6 +911,10 @@ function getPublicApiBaseUrl(req) {
 
 function normalizeApiBaseUrl(value) {
   return String(value || publicApiBaseUrl || appBaseUrl).replace(/\/+$/, "");
+}
+
+function shouldSkipAdminAuditLog(req) {
+  return req.headers["x-admin-background-refresh"] === "1";
 }
 
 function getSuperAdminEmails() {
