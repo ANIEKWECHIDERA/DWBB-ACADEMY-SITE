@@ -485,11 +485,19 @@ app.get("/api/admin/users", requireAdminAuth({ superAdminOnly: true }), async (_
 });
 
 app.put("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  const email = req.params.email;
+  const email = normalizeEmail(req.params.email);
   const role = req.body?.role;
 
   if (role !== "admin" && role !== "super_admin") {
     return res.status(400).json({ error: "A valid role is required." });
+  }
+
+  if (!email) {
+    return res.status(400).json({ error: "A valid admin email is required." });
+  }
+
+  if (isProtectedSuperAdminEmail(email)) {
+    return res.status(400).json({ error: "Primary super admin access is protected and cannot be changed here." });
   }
 
   const user = await upsertAdminUser({
@@ -1161,15 +1169,18 @@ function getSuperAdminEmails() {
     .filter(Boolean);
 }
 
-async function resolveAdminUser(email, uid) {
-  const superAdminEmails = getSuperAdminEmails();
+function isProtectedSuperAdminEmail(email) {
+  return getSuperAdminEmails().includes(normalizeEmail(email));
+}
 
-  if (superAdminEmails.includes(email)) {
+async function resolveAdminUser(email, uid) {
+  if (isProtectedSuperAdminEmail(email)) {
     return {
       email,
       uid,
       role: "super_admin",
       active: true,
+      protected: true,
     };
   }
 
@@ -1387,7 +1398,20 @@ async function listAdminUsersSafe() {
     return [];
   }
 
-  return listAdminUsers();
+  const users = await listAdminUsers();
+  const userMap = new Map(users.map((user) => [normalizeEmail(user.email), user]));
+
+  for (const email of getSuperAdminEmails()) {
+    userMap.set(email, {
+      ...(userMap.get(email) || { id: email, email }),
+      email,
+      role: "super_admin",
+      active: true,
+      protected: true,
+    });
+  }
+
+  return Array.from(userMap.values()).sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
 }
 
 async function listNotificationsSafe() {

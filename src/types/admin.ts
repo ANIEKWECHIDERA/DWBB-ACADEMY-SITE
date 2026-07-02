@@ -5,6 +5,7 @@ export interface AdminSessionUser {
   email: string;
   role: AdminRole;
   active: boolean;
+  protected?: boolean;
 }
 
 export interface AdminPermissions {
@@ -126,6 +127,7 @@ export interface AdminDirectoryUser {
   email: string;
   role: AdminRole;
   active: boolean;
+  protected?: boolean;
   invitedBy?: string;
   updatedAt?: string;
 }

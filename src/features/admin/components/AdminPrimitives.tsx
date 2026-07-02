@@ -30,11 +30,21 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-export function ToggleField({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+export function ToggleField({
+  checked,
+  disabled = false,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
   return (
-    <label className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-4">
+    <label className={cn("flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-4", disabled && "opacity-60")}>
       <span className="text-sm font-semibold text-slate-950 sm:text-base">{label}</span>
-      <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
+      <Checkbox checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(value === true)} />
     </label>
   );
 }

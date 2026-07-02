@@ -254,7 +254,9 @@ function SidebarAccountPanel({
                 <Avatar className="h-10 w-10 text-xs" initials={getInitials(session.user.email)} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-slate-950">{session.user.email}</p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">{session.user.role.replace("_", " ")}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
+                    {session.user.protected ? "primary super admin" : session.user.role.replace("_", " ")}
+                  </p>
                 </div>
                 <MoreHorizontal className="h-4 w-4 text-slate-500" />
               </button>

@@ -49,6 +49,7 @@ export function AdminAdminsSection({
 
   const selectedUser = useMemo(() => adminUsers.find((user) => user.email === selectedEmail) || null, [adminUsers, selectedEmail]);
   const isSelf = selectedUser?.email === session?.user.email;
+  const isProtected = Boolean(selectedUser?.protected);
   const isSavingAdmin = isBusy && mutationLabel.toLowerCase().includes("saving admin access");
   const isDeletingAdmin = isBusy && mutationLabel.toLowerCase().includes("deleting admin");
   const isDirectoryDirty = selectedUser ? selectedUser.role !== draftRole || selectedUser.active !== draftActive : false;
@@ -147,11 +148,18 @@ export function AdminAdminsSection({
               >
                 <div>
                   <p className="font-semibold text-slate-950">{user.email}</p>
-                  <p className="mt-1 text-sm text-slate-500">{user.role.replace("_", " ")}</p>
+                  <p className="mt-1 text-sm text-slate-500">{user.protected ? "primary super admin" : user.role.replace("_", " ")}</p>
                 </div>
-                <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold", user.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700")}>
-                  {user.active ? "Active" : "Disabled"}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {user.protected ? (
+                    <span className="inline-flex rounded-full bg-brand-gold/20 px-3 py-1 text-xs font-semibold text-slate-950">
+                      Protected
+                    </span>
+                  ) : null}
+                  <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold", user.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700")}>
+                    {user.active ? "Active" : "Disabled"}
+                  </span>
+                </div>
               </button>
             ))
           )}
@@ -168,12 +176,17 @@ export function AdminAdminsSection({
               </SheetHeader>
               <div className="flex-1 space-y-6 overflow-y-auto pr-1">
                 <Field label="Access Level">
-                  <Select className="rounded-lg" disabled={isBusy || isSelf} onChange={(event) => setDraftRole(event.target.value as AdminRole)} value={draftRole}>
+                  <Select className="rounded-lg" disabled={isBusy || isSelf || isProtected} onChange={(event) => setDraftRole(event.target.value as AdminRole)} value={draftRole}>
                     <option value="admin">Admin</option>
                     <option value="super_admin">Super Admin</option>
                   </Select>
                 </Field>
-                <ToggleField checked={draftActive} label="Admin is active" onChange={setDraftActive} />
+                <ToggleField checked={draftActive} disabled={isBusy || isSelf || isProtected} label="Admin is active" onChange={setDraftActive} />
+                {isProtected ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                    This protected super admin account is controlled by server configuration and cannot be changed or deleted from the console.
+                  </div>
+                ) : null}
                 {isSelf ? (
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
                     Your current admin account cannot be edited or deleted from this mobile directory sheet.
@@ -183,14 +196,14 @@ export function AdminAdminsSection({
               <SheetFooter>
                 <Button
                   className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0"
-                  disabled={isBusy || isSelf}
+                  disabled={isBusy || isSelf || isProtected}
                   onClick={() => setDeleteDialogOpen(true)}
                   variant="ghost"
                 >
                   {isDeletingAdmin ? <Spinner className="text-rose-700" size="sm" /> : null}
                   Delete Admin
                 </Button>
-                <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={!isDirectoryDirty || isBusy || isSelf} onClick={handleSaveAdmin} variant="gold">
+                <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={!isDirectoryDirty || isBusy || isSelf || isProtected} onClick={handleSaveAdmin} variant="gold">
                   {isSavingAdmin ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
                   Save Changes
                 </Button>
@@ -210,12 +223,17 @@ export function AdminAdminsSection({
               </DialogHeader>
               <div className="grid gap-6 py-2">
                 <Field label="Access Level">
-                  <Select className="rounded-lg" disabled={isBusy || isSelf} onChange={(event) => setDraftRole(event.target.value as AdminRole)} value={draftRole}>
+                  <Select className="rounded-lg" disabled={isBusy || isSelf || isProtected} onChange={(event) => setDraftRole(event.target.value as AdminRole)} value={draftRole}>
                     <option value="admin">Admin</option>
                     <option value="super_admin">Super Admin</option>
                   </Select>
                 </Field>
-                <ToggleField checked={draftActive} label="Admin is active" onChange={setDraftActive} />
+                <ToggleField checked={draftActive} disabled={isBusy || isSelf || isProtected} label="Admin is active" onChange={setDraftActive} />
+                {isProtected ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                    This protected super admin account is controlled by server configuration and cannot be changed or deleted from the console.
+                  </div>
+                ) : null}
                 {isSelf ? (
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
                     Your current admin account cannot be edited or deleted from this dialog.
@@ -225,14 +243,14 @@ export function AdminAdminsSection({
               <DialogFooter>
                 <Button
                   className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0"
-                  disabled={isBusy || isSelf}
+                  disabled={isBusy || isSelf || isProtected}
                   onClick={() => setDeleteDialogOpen(true)}
                   variant="ghost"
                 >
                   {isDeletingAdmin ? <Spinner className="text-rose-700" size="sm" /> : null}
                   Delete Admin
                 </Button>
-                <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={!isDirectoryDirty || isBusy || isSelf} onClick={handleSaveAdmin} variant="gold">
+                <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={!isDirectoryDirty || isBusy || isSelf || isProtected} onClick={handleSaveAdmin} variant="gold">
                   {isSavingAdmin ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
                   Save Changes
                 </Button>
