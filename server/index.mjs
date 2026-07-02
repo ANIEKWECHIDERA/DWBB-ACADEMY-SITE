@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import cors from "cors";
@@ -36,7 +37,7 @@ import {
   upsertAdminUser,
 } from "./admin-store.mjs";
 import { digitalCourseCatalog, findDigitalCourse } from "./course-catalog.mjs";
-import { getFirebaseAdminAuth, isFirebaseAdminConfigured } from "./firebase-admin.mjs";
+import { getFirebaseAdminAuth, getFirebaseAdminFirestore, isFirebaseAdminConfigured } from "./firebase-admin.mjs";
 import { getCheckoutPricing } from "../src/lib/paystackPricing.js";
 
 dotenv.config();
@@ -52,17 +53,21 @@ const enablePaymentDebug = String(process.env.ENABLE_PAYMENT_DEBUG || "false") =
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 const downloadLinkTtlDays = Number(process.env.DOWNLOAD_LINK_TTL_DAYS || 7);
 const trustProxy = process.env.TRUST_PROXY;
-const dataDir = process.env.DATA_DIR
+const configuredDataDir = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
   : path.resolve(process.cwd(), "server/.data");
-const purchasesFile = path.join(dataDir, "purchases.json");
-const attemptsFile = path.join(dataDir, "payment-attempts.json");
-const webhookEventsFile = path.join(dataDir, "webhook-events.json");
+const fallbackDataDir = path.join(os.tmpdir(), "dwbb-academy-data");
+let dataDir = configuredDataDir;
+let purchasesFile = path.join(dataDir, "purchases.json");
+let attemptsFile = path.join(dataDir, "payment-attempts.json");
+let webhookEventsFile = path.join(dataDir, "webhook-events.json");
 const rateLimitStores = new Map();
 const pendingJsonWrites = new Map();
 const adminUserCache = new Map();
 const adminActivityCache = new Map();
 const pendingAuditLogs = [];
+let warnedAboutFallbackDataDir = false;
+const PURCHASE_COLLECTION = "purchases";
 
 const ADMIN_USER_CACHE_TTL_MS = 10 * 60 * 1000;
 const ADMIN_LOGIN_DEDUP_TTL_MS = 6 * 60 * 60 * 1000;
@@ -650,8 +655,7 @@ app.post("/api/payments/webhook", webhookRateLimit, async (req, res) => {
 });
 
 app.get("/api/download/:token", downloadRateLimit, async (req, res) => {
-  const purchases = await readPurchases();
-  const purchase = purchases.find((entry) => entry.downloadToken === req.params.token);
+  const purchase = await findPurchaseByDownloadToken(req.params.token);
 
   if (!purchase) {
     return res.status(404).json({ error: "Download link is invalid or has expired." });
@@ -774,8 +778,7 @@ async function verifyAndFulfill(reference, options = {}) {
   const processingFeeKobo = metadataProcessingFeeKobo ?? recordedAttemptProcessingFeeKobo ?? paystackFeeKobo;
   const deliveryAsset = Array.isArray(course.assets) ? course.assets.find((asset) => asset?.url) || null : null;
 
-  const purchases = await readPurchases();
-  const existing = purchases.find((entry) => entry.reference === reference);
+  const existing = await findPurchaseByReference(reference);
 
   if (existing) {
     return {
@@ -813,8 +816,7 @@ async function verifyAndFulfill(reference, options = {}) {
     fileName: deliveryAsset?.fileName || course.fileName || null,
   };
 
-  purchases.push(purchase);
-  await writePurchases(purchases);
+  await createPurchaseRecord(purchase);
   await mirrorPurchaseSafe({ purchase, transaction, course });
 
   let emailMessage = `Payment verified. Download access is ready for ${downloadLinkTtlDays} days.`;
@@ -830,14 +832,19 @@ async function verifyAndFulfill(reference, options = {}) {
 
       purchase.emailPreviewUrl = emailResult.previewUrl || null;
       purchase.emailDeliveryStatus = "sent";
-      await writePurchases(purchases);
+      await updatePurchaseRecord(reference, {
+        emailDeliveryStatus: purchase.emailDeliveryStatus,
+        emailPreviewUrl: purchase.emailPreviewUrl,
+      });
 
       emailMessage = emailResult.previewUrl
         ? `${emailMessage} A preview email was generated for testing.`
         : `${emailMessage} A confirmation email has been sent.`;
     } catch (error) {
       purchase.emailDeliveryStatus = "failed";
-      await writePurchases(purchases);
+      await updatePurchaseRecord(reference, {
+        emailDeliveryStatus: purchase.emailDeliveryStatus,
+      });
       logServerError(`Confirmation email failed for ${reference}`, error);
       emailMessage = `${emailMessage} Your materials are available now, but the confirmation email could not be sent automatically.`;
     }
@@ -1496,7 +1503,36 @@ async function recordWebhookEvent(payload) {
 }
 
 async function ensureDataFile() {
-  await fs.mkdir(path.dirname(purchasesFile), { recursive: true });
+  try {
+    await ensureDataDirectory(configuredDataDir);
+  } catch (error) {
+    if (configuredDataDir !== fallbackDataDir) {
+      if (!warnedAboutFallbackDataDir) {
+        logServerError(
+          `Primary DATA_DIR unavailable at ${configuredDataDir}. Falling back to ${fallbackDataDir}`,
+          error,
+        );
+        warnedAboutFallbackDataDir = true;
+      }
+
+      await ensureDataDirectory(fallbackDataDir);
+      return;
+    }
+
+    throw error;
+  }
+}
+
+async function ensureDataDirectory(targetDir) {
+  await fs.mkdir(targetDir, { recursive: true });
+
+  if (dataDir !== targetDir) {
+    dataDir = targetDir;
+    purchasesFile = path.join(dataDir, "purchases.json");
+    attemptsFile = path.join(dataDir, "payment-attempts.json");
+    webhookEventsFile = path.join(dataDir, "webhook-events.json");
+  }
+
   await Promise.all([
     ensureJsonArrayFile(purchasesFile),
     ensureJsonArrayFile(attemptsFile),
@@ -1504,11 +1540,88 @@ async function ensureDataFile() {
   ]);
 }
 
-async function readPurchases() {
-  return readJsonFile(purchasesFile);
+function getPurchaseCollection() {
+  const firestore = getFirebaseAdminFirestore();
+  return firestore ? firestore.collection(PURCHASE_COLLECTION) : null;
 }
 
-async function writePurchases(purchases) {
+async function findPurchaseByReference(reference) {
+  if (!reference) {
+    return null;
+  }
+
+  const purchaseCollection = getPurchaseCollection();
+
+  if (purchaseCollection) {
+    const doc = await purchaseCollection.doc(reference).get();
+    return doc.exists ? { id: doc.id, ...doc.data() } : null;
+  }
+
+  const purchases = await readJsonFile(purchasesFile);
+  return purchases.find((entry) => entry.reference === reference) || null;
+}
+
+async function findPurchaseByDownloadToken(downloadToken) {
+  if (!downloadToken) {
+    return null;
+  }
+
+  const purchaseCollection = getPurchaseCollection();
+
+  if (purchaseCollection) {
+    const snapshot = await purchaseCollection.where("downloadToken", "==", downloadToken).limit(1).get();
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      return { id: doc.id, ...doc.data() };
+    }
+
+    return null;
+  }
+
+  const purchases = await readJsonFile(purchasesFile);
+  return purchases.find((entry) => entry.downloadToken === downloadToken) || null;
+}
+
+async function createPurchaseRecord(purchase) {
+  const purchaseCollection = getPurchaseCollection();
+
+  if (purchaseCollection) {
+    await purchaseCollection.doc(purchase.reference).set(purchase, { merge: false });
+    return;
+  }
+
+  const purchases = await readJsonFile(purchasesFile);
+  purchases.push(purchase);
+  await writeJsonFile(purchasesFile, purchases);
+}
+
+async function updatePurchaseRecord(reference, updates) {
+  const purchaseCollection = getPurchaseCollection();
+
+  if (purchaseCollection) {
+    await purchaseCollection.doc(reference).set(
+      {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+    return;
+  }
+
+  const purchases = await readJsonFile(purchasesFile);
+  const purchaseIndex = purchases.findIndex((entry) => entry.reference === reference);
+
+  if (purchaseIndex < 0) {
+    return;
+  }
+
+  purchases[purchaseIndex] = {
+    ...purchases[purchaseIndex],
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+
   await writeJsonFile(purchasesFile, purchases);
 }
 
