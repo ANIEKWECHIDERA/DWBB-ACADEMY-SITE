@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -40,6 +41,7 @@ export function AdminAdminsSection({
 }) {
   const [mobileView, setMobileView] = useState<"invite" | "directory">("invite");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [desktopDialogOpen, setDesktopDialogOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState("");
   const [draftRole, setDraftRole] = useState<AdminRole>("admin");
   const [draftActive, setDraftActive] = useState(true);
@@ -63,6 +65,7 @@ export function AdminAdminsSection({
   useEffect(() => {
     if (!selectedUser) {
       setMobileSheetOpen(false);
+      setDesktopDialogOpen(false);
     }
   }, [selectedUser]);
 
@@ -73,6 +76,7 @@ export function AdminAdminsSection({
 
     await onUpdateAdmin(selectedUser.email, draftRole, draftActive);
     setMobileSheetOpen(false);
+    setDesktopDialogOpen(false);
   }
 
   async function handleDeleteSelectedAdmin() {
@@ -83,6 +87,7 @@ export function AdminAdminsSection({
     await onDeleteAdmin(selectedUser.email);
     setDeleteDialogOpen(false);
     setMobileSheetOpen(false);
+    setDesktopDialogOpen(false);
     setSelectedEmail("");
   }
 
@@ -130,10 +135,13 @@ export function AdminAdminsSection({
                 key={user.email}
                 className="flex w-full flex-col gap-2 rounded-lg border border-slate-200 p-4 text-left transition hover:border-slate-300 sm:flex-row sm:items-center sm:justify-between"
                 onClick={() => {
+                  setSelectedEmail(user.email);
                   if (window.matchMedia("(max-width: 1023px)").matches) {
-                    setSelectedEmail(user.email);
                     setMobileSheetOpen(true);
+                    return;
                   }
+
+                  setDesktopDialogOpen(true);
                 }}
                 type="button"
               >
@@ -191,6 +199,48 @@ export function AdminAdminsSection({
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <Dialog onOpenChange={setDesktopDialogOpen} open={desktopDialogOpen}>
+        <DialogContent className="hidden lg:flex">
+          {selectedUser ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedUser.email}</DialogTitle>
+                <DialogDescription>Update access level, active status, or remove this admin entirely.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-6 py-2">
+                <Field label="Access Level">
+                  <Select className="rounded-lg" disabled={isBusy || isSelf} onChange={(event) => setDraftRole(event.target.value as AdminRole)} value={draftRole}>
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </Select>
+                </Field>
+                <ToggleField checked={draftActive} label="Admin is active" onChange={setDraftActive} />
+                {isSelf ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                    Your current admin account cannot be edited or deleted from this dialog.
+                  </div>
+                ) : null}
+              </div>
+              <DialogFooter>
+                <Button
+                  className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0"
+                  disabled={isBusy || isSelf}
+                  onClick={() => setDeleteDialogOpen(true)}
+                  variant="ghost"
+                >
+                  {isDeletingAdmin ? <Spinner className="text-rose-700" size="sm" /> : null}
+                  Delete Admin
+                </Button>
+                <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={!isDirectoryDirty || isBusy || isSelf} onClick={handleSaveAdmin} variant="gold">
+                  {isSavingAdmin ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         confirmLabel="Delete admin"
