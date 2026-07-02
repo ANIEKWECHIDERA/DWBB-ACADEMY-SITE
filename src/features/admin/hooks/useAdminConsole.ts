@@ -434,7 +434,6 @@ export function useAdminConsole() {
 
   async function handleDeleteCourse() {
     if (!firebaseUser || !courseDraft) return;
-    if (!window.confirm(`Delete ${courseDraft.title}? This action removes it from Firestore.`)) return;
 
     try {
       await runBusyAction("Deleting course...", async () => {
@@ -502,7 +501,6 @@ export function useAdminConsole() {
 
   async function handleDeleteTransactions(references: string[]) {
     if (!firebaseUser || references.length === 0) return;
-    if (!window.confirm(`Delete ${references.length} transaction record(s)?`)) return;
 
     try {
       await runBusyAction("Deleting transactions...", async () => {
@@ -521,7 +519,6 @@ export function useAdminConsole() {
 
   async function handleDeleteCustomers(emails: string[]) {
     if (!firebaseUser || emails.length === 0) return;
-    if (!window.confirm(`Delete ${emails.length} customer record(s)?`)) return;
 
     try {
       await runBusyAction("Deleting customers...", async () => {

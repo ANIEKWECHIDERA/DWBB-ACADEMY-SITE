@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs } from "@/components/ui/tabs";
 import { AdminFilterCombobox } from "@/features/admin/components/AdminFilterCombobox";
@@ -10,9 +11,10 @@ import type { AdminRange } from "@/lib/admin-api";
 import type { AuditLogItem, LoginLogItem } from "@/types/admin";
 import { formatDate } from "@/features/admin/utils";
 
-import { AdminPanel, EmptyState } from "../AdminPrimitives";
+import { AdminPanel, EmptyState, PaginationControls } from "../AdminPrimitives";
 
 type AuditView = "audit" | "login";
+const PAGE_SIZE_OPTIONS = ["10", "20", "30", "50", "all"] as const;
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -49,6 +51,57 @@ export function AdminLogsSection({
   const [selectedLoginId, setSelectedLoginId] = useState<string>(loginLogs[0]?.id || "");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [mobileSelection, setMobileSelection] = useState<{ type: AuditView; id: string } | null>(null);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>("10");
+  const [auditPage, setAuditPage] = useState(1);
+  const [loginPage, setLoginPage] = useState(1);
+
+  const activeList = desktopView === "audit" ? auditLogs : loginLogs;
+  const activePage = desktopView === "audit" ? auditPage : loginPage;
+  const pageCount = useMemo(() => {
+    if (activeList.length === 0) {
+      return 0;
+    }
+
+    if (pageSize === "all") {
+      return 1;
+    }
+
+    return Math.ceil(activeList.length / Number(pageSize));
+  }, [activeList.length, pageSize]);
+
+  const paginatedAuditLogs = useMemo(() => {
+    if (pageSize === "all") {
+      return auditLogs;
+    }
+
+    const size = Number(pageSize);
+    const startIndex = (auditPage - 1) * size;
+    return auditLogs.slice(startIndex, startIndex + size);
+  }, [auditLogs, auditPage, pageSize]);
+
+  const paginatedLoginLogs = useMemo(() => {
+    if (pageSize === "all") {
+      return loginLogs;
+    }
+
+    const size = Number(pageSize);
+    const startIndex = (loginPage - 1) * size;
+    return loginLogs.slice(startIndex, startIndex + size);
+  }, [loginLogs, loginPage, pageSize]);
+
+  useEffect(() => {
+    const maxAuditPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(auditLogs.length / Number(pageSize)));
+    if (auditPage > maxAuditPages) {
+      setAuditPage(maxAuditPages);
+    }
+  }, [auditLogs.length, auditPage, pageSize]);
+
+  useEffect(() => {
+    const maxLoginPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(loginLogs.length / Number(pageSize)));
+    if (loginPage > maxLoginPages) {
+      setLoginPage(maxLoginPages);
+    }
+  }, [loginLogs.length, loginPage, pageSize]);
 
   const selectedAudit = useMemo(() => auditLogs.find((item) => item.id === selectedAuditId) || auditLogs[0] || null, [auditLogs, selectedAuditId]);
   const selectedLogin = useMemo(() => loginLogs.find((item) => item.id === selectedLoginId) || loginLogs[0] || null, [loginLogs, selectedLoginId]);
@@ -120,17 +173,34 @@ export function AdminLogsSection({
                 {auditLogs.length === 0 ? (
                   <EmptyState title="No audit logs yet" description="Action logs will appear here as admins use the console." compact />
                 ) : (
-                  auditLogs.map((item) => (
+                  paginatedAuditLogs.map((item) => (
                     <button key={item.id} className="w-full rounded-lg border border-slate-200 p-4 text-left" onClick={() => openMobileLog("audit", item.id)} type="button">
-                      <p className="font-semibold text-slate-950">{item.action}</p>
-                      <p className="mt-1 text-sm text-slate-500">{item.actorEmail || "System"}</p>
-                      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">
-                        {item.entityType} | {item.entityId} | {formatDate(item.createdAt)}
-                      </p>
-                    </button>
+                      <p className="text-sm font-semibold text-slate-950">{item.action}</p>
+                      <p className="mt-1 text-xs text-slate-500 sm:text-sm">{item.actorEmail || "System"}</p>
+                  <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">
+                    {item.entityType} | {item.entityId} | {formatDate(item.createdAt)}
+                  </p>
+                </button>
                   ))
                 )}
               </div>
+              {auditLogs.length > 0 ? (
+                <div className="mt-4">
+                  <PaginationControls
+                    currentPage={auditPage}
+                    itemLabel="audit logs"
+                    onPageChange={setAuditPage}
+                    onPageSizeChange={(value) => {
+                      setPageSize(value as (typeof PAGE_SIZE_OPTIONS)[number]);
+                      setAuditPage(1);
+                      setLoginPage(1);
+                    }}
+                    pageCount={pageSize === "all" ? 1 : Math.max(1, Math.ceil(auditLogs.length / Number(pageSize)))}
+                    pageSize={pageSize}
+                    totalCount={auditLogs.length}
+                  />
+                </div>
+              ) : null}
             </AdminPanel>
 
             <AdminPanel>
@@ -139,20 +209,37 @@ export function AdminLogsSection({
                 {loginLogs.length === 0 ? (
                   <EmptyState title="No login activity yet" description="Successful admin sign-ins will be listed here." compact />
                 ) : (
-                  loginLogs.map((item) => (
+                  paginatedLoginLogs.map((item) => (
                     <button key={item.id} className="w-full rounded-lg border border-slate-200 p-4 text-left" onClick={() => openMobileLog("login", item.id)} type="button">
-                      <p className="font-semibold text-slate-950">{item.email}</p>
-                      <p className="mt-1 text-sm text-slate-500">{item.role.replace("_", " ")}</p>
-                      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">{formatDate(item.createdAt)}</p>
+                      <p className="text-sm font-semibold text-slate-950">{item.email}</p>
+                      <p className="mt-1 text-xs text-slate-500 sm:text-sm">{item.role.replace("_", " ")}</p>
+                      <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">{formatDate(item.createdAt)}</p>
                     </button>
                   ))
                 )}
               </div>
+              {loginLogs.length > 0 ? (
+                <div className="mt-4">
+                  <PaginationControls
+                    currentPage={loginPage}
+                    itemLabel="login records"
+                    onPageChange={setLoginPage}
+                    onPageSizeChange={(value) => {
+                      setPageSize(value as (typeof PAGE_SIZE_OPTIONS)[number]);
+                      setAuditPage(1);
+                      setLoginPage(1);
+                    }}
+                    pageCount={pageSize === "all" ? 1 : Math.max(1, Math.ceil(loginLogs.length / Number(pageSize)))}
+                    pageSize={pageSize}
+                    totalCount={loginLogs.length}
+                  />
+                </div>
+              ) : null}
             </AdminPanel>
           </div>
 
-          <div className="hidden gap-6 lg:grid lg:grid-cols-[0.95fr_1.15fr]">
-            <AdminPanel>
+          <div className="hidden gap-6 lg:grid lg:min-h-0 lg:grid-cols-[0.95fr_1.15fr] lg:h-full">
+            <AdminPanel className="flex min-h-0 flex-col">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Audit Workspace</p>
@@ -166,46 +253,78 @@ export function AdminLogsSection({
                 value={desktopView === "login" ? "Login Activity" : "Audit Logs"}
               />
 
-              <div className="mt-6 space-y-3">
+              <div className="mt-6 min-h-0 flex-1">
                 {desktopView === "audit" ? (
                   auditLogs.length === 0 ? (
                     <EmptyState title="No audit logs yet" description="Action logs will appear here as admins use the console." compact />
                   ) : (
-                    auditLogs.map((item) => (
-                      <button
-                        key={item.id}
-                        className={`w-full rounded-lg border p-4 text-left ${selectedAudit?.id === item.id ? "border-brand-gold bg-brand-gold/10" : "border-slate-200"}`}
-                        onClick={() => setSelectedAuditId(item.id)}
-                        type="button"
-                      >
-                        <p className="font-semibold text-slate-950">{item.action}</p>
-                        <p className="mt-1 text-sm text-slate-500">{item.actorEmail || "System"}</p>
-                        <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">
-                          {item.entityType} | {item.entityId} | {formatDate(item.createdAt)}
-                        </p>
-                      </button>
-                    ))
+                    <ScrollArea className="h-full pr-3">
+                      <div className="space-y-3">
+                        {paginatedAuditLogs.map((item) => (
+                          <button
+                            key={item.id}
+                            className={`w-full rounded-lg border p-4 text-left ${selectedAudit?.id === item.id ? "border-brand-gold bg-brand-gold/10" : "border-slate-200"}`}
+                            onClick={() => setSelectedAuditId(item.id)}
+                            type="button"
+                          >
+                            <p className="text-sm font-semibold text-slate-950">{item.action}</p>
+                            <p className="mt-1 text-xs text-slate-500 sm:text-sm">{item.actorEmail || "System"}</p>
+                            <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">
+                              {item.entityType} | {item.entityId} | {formatDate(item.createdAt)}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
                   )
                 ) : loginLogs.length === 0 ? (
                   <EmptyState title="No login activity yet" description="Successful admin sign-ins will be listed here." compact />
                 ) : (
-                  loginLogs.map((item) => (
-                    <button
-                      key={item.id}
-                      className={`w-full rounded-lg border p-4 text-left ${selectedLogin?.id === item.id ? "border-brand-gold bg-brand-gold/10" : "border-slate-200"}`}
-                      onClick={() => setSelectedLoginId(item.id)}
-                      type="button"
-                    >
-                      <p className="font-semibold text-slate-950">{item.email}</p>
-                      <p className="mt-1 text-sm text-slate-500">{item.role.replace("_", " ")}</p>
-                      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">{formatDate(item.createdAt)}</p>
-                    </button>
-                  ))
+                  <ScrollArea className="h-full pr-3">
+                    <div className="space-y-3">
+                      {paginatedLoginLogs.map((item) => (
+                        <button
+                          key={item.id}
+                          className={`w-full rounded-lg border p-4 text-left ${selectedLogin?.id === item.id ? "border-brand-gold bg-brand-gold/10" : "border-slate-200"}`}
+                          onClick={() => setSelectedLoginId(item.id)}
+                          type="button"
+                        >
+                          <p className="text-sm font-semibold text-slate-950">{item.email}</p>
+                          <p className="mt-1 text-xs text-slate-500 sm:text-sm">{item.role.replace("_", " ")}</p>
+                          <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">{formatDate(item.createdAt)}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 )}
               </div>
+              {activeList.length > 0 ? (
+                <div className="mt-4">
+                  <PaginationControls
+                    currentPage={activePage}
+                    itemLabel={desktopView === "audit" ? "audit logs" : "login records"}
+                    onPageChange={(page) => {
+                      if (desktopView === "audit") {
+                        setAuditPage(page);
+                        return;
+                      }
+
+                      setLoginPage(page);
+                    }}
+                    onPageSizeChange={(value) => {
+                      setPageSize(value as (typeof PAGE_SIZE_OPTIONS)[number]);
+                      setAuditPage(1);
+                      setLoginPage(1);
+                    }}
+                    pageCount={pageCount}
+                    pageSize={pageSize}
+                    totalCount={activeList.length}
+                  />
+                </div>
+              ) : null}
             </AdminPanel>
 
-            <AdminPanel>
+            <AdminPanel className="flex h-full flex-col">
               {desktopView === "audit" ? (
                 selectedAudit ? (
                   <>

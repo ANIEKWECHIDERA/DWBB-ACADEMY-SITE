@@ -5,13 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ManagedCourse } from "@/types/admin";
 import { formatCurrencyFromNaira } from "@/features/admin/utils";
 
-import { AdminPanel, EmptyState, Field, ToggleField } from "../AdminPrimitives";
+import { AdminPanel, ConfirmDialog, EmptyState, Field, ToggleField } from "../AdminPrimitives";
 
 function SortableCourseRow({ active, course, onSelect }: { active: boolean; course: ManagedCourse; onSelect: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: course.slug });
@@ -22,7 +23,7 @@ function SortableCourseRow({ active, course, onSelect }: { active: boolean; cour
       type="button"
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "flex w-full items-center justify-between rounded-xl border px-4 py-4 text-left transition",
+        "flex w-full items-center justify-between rounded-lg border px-4 py-4 text-left transition",
         active ? "border-brand-gold bg-brand-gold/10" : "border-slate-200 bg-white hover:border-slate-300",
       )}
       onClick={onSelect}
@@ -64,6 +65,7 @@ export function AdminCoursesSection({
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!courseDraft) {
@@ -175,8 +177,8 @@ export function AdminCoursesSection({
       <AdminPanel>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Catalog Order</p>
-            <h3 className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">Drag to reorder</h3>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 sm:text-sm">Catalog Order</p>
+            <h3 className="mt-2 text-lg font-bold text-slate-950 sm:text-2xl">Drag to reorder</h3>
           </div>
         </div>
         <div className="mt-6">
@@ -206,19 +208,23 @@ export function AdminCoursesSection({
         </div>
       </AdminPanel>
 
-      <AdminPanel className="hidden xl:block">
+      <AdminPanel className="hidden xl:flex xl:min-h-0 xl:flex-col">
         {courseDraft ? (
-          <div className="space-y-6">
-            {editorContent}
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <>
+            <ScrollArea className="min-h-0 flex-1 pr-3">
+              <div className="space-y-6">
+                {editorContent}
+              </div>
+            </ScrollArea>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Button className="w-full rounded-lg shadow-none hover:translate-y-0 sm:w-auto" onClick={onSaveCourse} variant="gold">
                 Save Course
               </Button>
-              <Button className="w-full rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0 sm:w-auto" onClick={onDeleteCourse} variant="ghost">
+              <Button className="w-full rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0 sm:w-auto" onClick={() => setDeleteDialogOpen(true)} variant="ghost">
                 Hard Delete
               </Button>
             </div>
-          </div>
+          </>
         ) : (
           <EmptyState title="Select a course" description="Choose a course from the left to edit details, pricing, and publish state." compact />
         )}
@@ -234,7 +240,7 @@ export function AdminCoursesSection({
               </SheetHeader>
               <div className="flex-1 overflow-y-auto pr-1">{editorContent}</div>
               <SheetFooter>
-                <Button className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0" onClick={onDeleteCourse} variant="ghost">
+                <Button className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0" onClick={() => setDeleteDialogOpen(true)} variant="ghost">
                   Hard Delete
                 </Button>
                 <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={!isDirty} onClick={handleMobileSave} variant="gold">
@@ -245,6 +251,18 @@ export function AdminCoursesSection({
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        confirmLabel="Delete course"
+        description={courseDraft ? `${courseDraft.title} will be permanently removed from the managed catalog.` : "This course will be permanently removed from the managed catalog."}
+        onConfirm={async () => {
+          await onDeleteCourse();
+          setDeleteDialogOpen(false);
+        }}
+        onOpenChange={setDeleteDialogOpen}
+        open={deleteDialogOpen}
+        title="Delete this course?"
+      />
     </div>
   );
 }
