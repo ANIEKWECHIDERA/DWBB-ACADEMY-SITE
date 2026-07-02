@@ -496,6 +496,10 @@ app.put("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true }), a
     return res.status(400).json({ error: "A valid admin email is required." });
   }
 
+  if (email === normalizeEmail(req.adminUser.email)) {
+    return res.status(400).json({ error: "You cannot change your own admin access from the console." });
+  }
+
   if (isProtectedSuperAdminEmail(email)) {
     return res.status(400).json({ error: "Primary super admin access is protected and cannot be changed here." });
   }

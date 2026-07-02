@@ -126,6 +126,8 @@ export function useAdminConsole() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const selectedCourseSlugRef = useRef(selectedCourseSlug);
 
+  const currentUserEmail = useMemo(() => String(session?.user.email || "").trim().toLowerCase(), [session?.user.email]);
+
   useEffect(() => {
     selectedCourseSlugRef.current = selectedCourseSlug;
   }, [selectedCourseSlug]);
@@ -312,7 +314,8 @@ export function useAdminConsole() {
   }, [session]);
 
   const pricingPreview = courseDraft ? getCheckoutPricing(courseDraft.priceNaira) : null;
-  const inviteEmailValid = adminEmailPattern.test(inviteEmail.trim());
+  const normalizedInviteEmail = inviteEmail.trim().toLowerCase();
+  const inviteEmailValid = adminEmailPattern.test(inviteEmail.trim()) && normalizedInviteEmail !== currentUserEmail;
   const mainSections = visibleSections.filter((section) => section.id === "overview" || section.id === "courses");
   const commerceSections = visibleSections.filter((section) => section.id === "transactions" || section.id === "customers");
   const governanceSections = visibleSections.filter((section) => section.id === "logs" || section.id === "admins");
@@ -381,6 +384,18 @@ export function useAdminConsole() {
     setMobileSidebarOpen(false);
   }
 
+  function ensurePermission(condition: boolean, message: string) {
+    if (condition) {
+      return true;
+    }
+
+    pushToast({
+      title: "Action not allowed",
+      description: message,
+    });
+    return false;
+  }
+
   async function runBusyAction<T>(label: string, action: () => Promise<T>) {
     setMutating(true);
     setMutationLabel(label);
@@ -414,6 +429,7 @@ export function useAdminConsole() {
 
   async function handleSaveCourse() {
     if (!firebaseUser || !courseDraft) return false;
+    if (!ensurePermission(Boolean(session?.permissions.canManageCourses), "Only authorized admins can update courses.")) return false;
 
     try {
       await runBusyAction("Saving course...", async () => {
@@ -438,6 +454,7 @@ export function useAdminConsole() {
 
   async function handleDeleteCourse() {
     if (!firebaseUser || !courseDraft) return;
+    if (!ensurePermission(Boolean(session?.permissions.canManageCourses), "Only authorized admins can delete courses.")) return;
 
     try {
       await runBusyAction("Deleting course...", async () => {
@@ -459,6 +476,7 @@ export function useAdminConsole() {
     if (!firebaseUser || !courseDraft) {
       return;
     }
+    if (!ensurePermission(Boolean(session?.permissions.canManageCourses), "Only authorized admins can manage course files.")) return;
 
     try {
       await runBusyAction("Uploading course file...", async () => {
@@ -483,6 +501,7 @@ export function useAdminConsole() {
     if (!firebaseUser || !courseDraft) {
       return;
     }
+    if (!ensurePermission(Boolean(session?.permissions.canManageCourses), "Only authorized admins can manage course files.")) return;
 
     try {
       await runBusyAction("Removing course file...", async () => {
@@ -506,6 +525,7 @@ export function useAdminConsole() {
   async function handleCourseDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id || !firebaseUser) return;
+    if (!ensurePermission(Boolean(session?.permissions.canManageCourses), "Only authorized admins can reorder courses.")) return;
 
     const oldIndex = courses.findIndex((course) => course.slug === String(active.id));
     const newIndex = courses.findIndex((course) => course.slug === String(over.id));
@@ -527,6 +547,14 @@ export function useAdminConsole() {
 
   async function handleInviteAdmin() {
     if (!firebaseUser || !inviteEmail.trim()) return;
+    if (!ensurePermission(Boolean(session?.permissions.canManageAdmins), "Only super admins can manage admin access.")) return;
+    if (normalizedInviteEmail === currentUserEmail) {
+      pushToast({
+        title: "Action not allowed",
+        description: "You cannot change your own admin access from the invite form.",
+      });
+      return;
+    }
 
     try {
       await runBusyAction("Saving admin access...", async () => {
@@ -549,6 +577,7 @@ export function useAdminConsole() {
 
   async function handleUpdateAdminDirectoryUser(email: string, role: AdminRole, active: boolean) {
     if (!firebaseUser || !email.trim()) return;
+    if (!ensurePermission(Boolean(session?.permissions.canManageAdmins), "Only super admins can manage admin access.")) return;
 
     try {
       await runBusyAction("Saving admin access...", async () => {
@@ -569,6 +598,7 @@ export function useAdminConsole() {
 
   async function handleDeleteAdminDirectoryUser(email: string) {
     if (!firebaseUser || !email.trim()) return;
+    if (!ensurePermission(Boolean(session?.permissions.canManageAdmins), "Only super admins can delete admin access.")) return;
 
     try {
       await runBusyAction("Deleting admin...", async () => {
@@ -590,6 +620,7 @@ export function useAdminConsole() {
 
   async function handleDeleteTransactions(references: string[]) {
     if (!firebaseUser || references.length === 0) return;
+    if (!ensurePermission(Boolean(session?.permissions.canViewTransactions), "Only super admins can delete transaction records.")) return;
 
     try {
       await runBusyAction("Deleting transactions...", async () => {
@@ -608,6 +639,7 @@ export function useAdminConsole() {
 
   async function handleDeleteCustomers(emails: string[]) {
     if (!firebaseUser || emails.length === 0) return;
+    if (!ensurePermission(Boolean(session?.permissions.canViewCustomers), "Only super admins can delete customer records.")) return;
 
     try {
       await runBusyAction("Deleting customers...", async () => {
@@ -683,6 +715,7 @@ export function useAdminConsole() {
     if (!firebaseUser) {
       return;
     }
+    if (!ensurePermission(Boolean(session?.permissions.canViewAuditLogs), "Only super admins can sync audit logs.")) return;
 
     try {
       await runBusyAction("Syncing audit logs...", async () => {
