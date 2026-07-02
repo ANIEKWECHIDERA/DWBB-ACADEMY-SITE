@@ -71,7 +71,12 @@ export default function AdminConsole() {
         />
 
         <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
-          <AdminHeader activeSection={admin.activeSection} onOpenMobileSidebar={() => admin.setMobileSidebarOpen(true)} />
+          <AdminHeader
+            activeSection={admin.activeSection}
+            onOpenMobileSidebar={() => admin.setMobileSidebarOpen(true)}
+            onOpenNotifications={() => admin.setActiveSection("notifications")}
+            unreadNotifications={admin.unreadNotifications}
+          />
 
           <div className="relative mt-4 flex-1 overflow-hidden sm:mt-6">
             {admin.isPageBusy ? (
@@ -97,6 +102,8 @@ export default function AdminConsole() {
                     onDeleteCourse={admin.handleDeleteCourse}
                     onDeleteCourseAsset={admin.handleDeleteCourseAsset}
                     onDragEnd={admin.handleCourseDragEnd}
+                    isBusy={admin.mutating}
+                    mutationLabel={admin.mutationLabel}
                     onSaveCourse={admin.handleSaveCourse}
                     onUploadCourseAsset={admin.handleUploadCourseAsset}
                     pricingPreview={admin.pricingPreview}

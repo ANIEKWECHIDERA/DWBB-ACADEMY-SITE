@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import type { AdminSession } from "@/types/admin";
-import { LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { Bell, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
 import type { AdminNavSection, AdminSection } from "@/features/admin/types";
 import { getInitials } from "@/features/admin/utils";
@@ -284,14 +284,31 @@ function SidebarAccountPanel({
         </DropdownMenu>
       </div>
       {(mobile || sidebarOpen) ? (
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", session.mode === "live" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
-            {session.mode.toUpperCase()} MODE
-          </span>
-          <Button className="rounded-lg px-3 shadow-none hover:translate-y-0" onClick={onLogout} variant="ghost">
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
+        <div className="mt-3 space-y-2">
+          <button
+            className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-3 text-left text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-100"
+            onClick={() => setActiveSection("notifications")}
+            type="button"
+          >
+            <span className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              Notifications
+            </span>
+            <span className="flex items-center gap-2 text-xs text-slate-500">
+              {unreadNotifications > 0 ? <span className="h-2.5 w-2.5 rounded-full bg-brand-coral" /> : null}
+              {unreadNotifications > 0 ? unreadNotifications : "0"}
+            </span>
+          </button>
+
+          <div className="flex items-center justify-between gap-2">
+            <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", session.mode === "live" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+              {session.mode.toUpperCase()} MODE
+            </span>
+            <Button className="rounded-lg px-3 shadow-none hover:translate-y-0" onClick={onLogout} variant="ghost">
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
       ) : null}
     </div>

@@ -14,7 +14,7 @@ const variants: Record<Variant, string> = {
   default: "bg-deep-blue text-white hover:bg-mid-blue",
   outline: "border border-white/30 bg-white/5 text-white hover:bg-white/10",
   ghost: "bg-transparent text-slate-700 hover:bg-slate-100",
-  gold: "bg-gradient-cta text-slate-950 shadow-soft hover:opacity-95",
+  gold: "bg-gradient-cta text-slate-950 hover:opacity-95",
 };
 
 export function Button({ asChild, className, variant = "default", ...props }: ButtonProps) {

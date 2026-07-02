@@ -50,7 +50,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="fixed right-4 top-4 z-[120] space-y-3">
         {toasts.map((toast) => (
-          <div key={toast.id} className="flex max-w-sm items-start gap-3 rounded-3xl border border-brand-green/30 bg-white px-4 py-4 shadow-glow">
+          <div key={toast.id} className="flex max-w-sm items-start gap-3 rounded-3xl border border-brand-green/30 bg-white px-4 py-4">
             <CheckCircle2 className="mt-0.5 h-5 w-5 text-brand-green" />
             <div className="flex-1">
               <p className="font-semibold text-slate-950">{toast.title}</p>

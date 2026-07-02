@@ -14,7 +14,7 @@ export default function NotFound() {
       <PetalOrb className="right-0 top-24" opacity={0.2} size={360} />
 
       <div className="container-shell relative">
-        <Card className="mx-auto max-w-5xl overflow-hidden rounded-[40px] border border-white/10 bg-white/95 p-8 shadow-glow sm:p-12">
+        <Card className="mx-auto max-w-5xl overflow-hidden rounded-[40px] border border-white/10 bg-white/95 p-8 sm:p-12">
           <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
             <div>
               <BrandLogo className="justify-start" imageClassName="h-20" />

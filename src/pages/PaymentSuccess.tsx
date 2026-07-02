@@ -122,7 +122,7 @@ export default function PaymentSuccess() {
   return (
     <section className="bg-gradient-hero py-20">
       <div className="container-shell">
-        <Card className="mx-auto max-w-3xl rounded-[36px] border border-white/10 bg-white p-8 shadow-glow sm:p-10">
+        <Card className="mx-auto max-w-3xl rounded-[36px] border border-white/10 bg-white p-8 sm:p-10">
           <BrandLogo className="justify-center" imageClassName="h-20" withWordmark={false} />
           <div className="mt-6 text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-gold">Payment Status</p>

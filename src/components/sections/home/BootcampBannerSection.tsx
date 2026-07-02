@@ -6,7 +6,7 @@ export function BootcampBannerSection() {
   return (
     <section className="pb-20">
       <div className="container-shell">
-        <div className="relative overflow-hidden rounded-[36px] bg-gradient-hero px-6 py-10 text-white shadow-glow sm:px-10">
+        <div className="relative overflow-hidden rounded-[36px] bg-gradient-hero px-6 py-10 text-white sm:px-10">
           <PetalOrb className="-right-16 top-0" size={380} blur={70} opacity={0.35} />
           <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>

@@ -50,13 +50,13 @@ export function Navbar() {
   const coursesTone = scrolled ? "text-white/80 hover:text-white" : "text-slate-800/90 hover:text-slate-950";
   const mobileButtonTone = scrolled
     ? "border-white/20 bg-white/10 text-white"
-    : "border-slate-900/10 bg-slate-950 text-white shadow-soft";
+    : "border-slate-900/10 bg-slate-950 text-white";
 
   return (
     <header
       className={cn(
         "fixed inset-x-0 top-0 z-50 transition-all duration-300",
-        scrolled ? "bg-deep-blue/95 shadow-soft backdrop-blur-xl" : "bg-transparent",
+        scrolled ? "bg-deep-blue/95 backdrop-blur-xl" : "bg-transparent",
       )}
     >
       <div className="container-shell">
@@ -80,7 +80,7 @@ export function Navbar() {
                 Courses <ChevronDown className="h-4 w-4" />
               </button>
               {coursesOpen ? (
-                <div className="absolute left-1/2 top-10 w-72 -translate-x-1/2 rounded-[24px] border border-white/10 bg-deep-blue p-3 shadow-glow">
+                <div className="absolute left-1/2 top-10 w-72 -translate-x-1/2 rounded-[24px] border border-white/10 bg-deep-blue p-3">
                   {courseLinks.map((link) => (
                     <Link
                       key={link.to}

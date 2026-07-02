@@ -47,7 +47,7 @@ export default function CoursesIndex() {
               <CourseCard key={course.id} course={course} />
             ))}
           </div>
-          <div className="mt-12 rounded-[32px] bg-gradient-cta px-6 py-8 text-center text-slate-950 shadow-soft">
+          <div className="mt-12 rounded-[32px] bg-gradient-cta px-6 py-8 text-center text-slate-950">
             <p className="text-lg font-semibold">Not sure which course to take? Chat with our advisors on WhatsApp!</p>
             <Button asChild className="mt-5 bg-deep-blue text-white hover:bg-mid-blue">
               <a href={buildWhatsAppUrl()} target="_blank" rel="noreferrer">

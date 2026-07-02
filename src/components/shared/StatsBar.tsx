@@ -7,7 +7,7 @@ const stats = [
 
 export function StatsBar() {
   return (
-    <div className="grid gap-5 rounded-[28px] bg-white p-8 shadow-soft sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-5 rounded-[28px] bg-white p-8 sm:grid-cols-2 lg:grid-cols-4">
       {stats.map((stat) => (
         <div key={stat.label}>
           <p className="font-display text-3xl font-bold text-deep-blue">{stat.value}</p>

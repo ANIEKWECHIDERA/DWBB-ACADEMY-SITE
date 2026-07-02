@@ -144,5 +144,17 @@
     "email": "chideraaniekwederah73@gmail.com",
     "appBaseUrl": "http://127.0.0.1:5173",
     "createdAt": "2026-07-02T17:17:58.019Z"
+  },
+  {
+    "reference": "dwbb-ai-automation-1783013342693-3xjlps",
+    "accessCode": "w04qilps3fgpswp",
+    "courseSlug": "ai-automation",
+    "courseTitle": "AI & Automation",
+    "amount": 18200000,
+    "processingFeeKobo": 200000,
+    "targetAmountKobo": 18000000,
+    "email": "chideraaniekwederah73@gmail.com",
+    "appBaseUrl": "http://127.0.0.1:5173",
+    "createdAt": "2026-07-02T17:29:03.516Z"
   }
 ]
