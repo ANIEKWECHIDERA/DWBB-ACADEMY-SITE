@@ -8,6 +8,7 @@ import express from "express";
 import nodemailer from "nodemailer";
 
 import {
+  clearManagedCourseAssets,
   deleteManagedCourse,
   dismissNotification,
   deleteCustomersByEmail,
@@ -29,6 +30,7 @@ import {
   recordAdminLogin,
   recordAuditLogsBatch,
   reorderManagedCourses,
+  replaceManagedCourseAsset,
   updateNotificationStatus,
   updateManagedCourse,
   upsertAdminUser,
@@ -93,7 +95,7 @@ app.use(
 );
 app.use(
   express.json({
-    limit: "100kb",
+    limit: "12mb",
     verify: (req, _res, buffer) => {
       req.rawBody = buffer.toString();
     },
@@ -235,6 +237,58 @@ app.delete("/api/admin/courses/:slug", requireAdminAuth(), async (req, res) => {
     metadata: {},
   });
   res.status(204).end();
+});
+
+app.post("/api/admin/courses/:slug/asset", requireAdminAuth(), async (req, res) => {
+  const slug = req.params.slug;
+  const dataUri = typeof req.body?.dataUri === "string" ? req.body.dataUri : "";
+  const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
+
+  if (!dataUri || !fileName) {
+    return res.status(400).json({ error: "A valid file is required." });
+  }
+
+  try {
+    const course = await replaceManagedCourseAsset(slug, {
+      actor: req.adminUser,
+      dataUri,
+      fileName: sanitizeAssetFileName(fileName),
+    });
+
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "course.asset.replaced",
+      entityType: "course",
+      entityId: slug,
+      metadata: { fileName },
+    });
+
+    res.json({ course });
+  } catch (error) {
+    logServerError("Course asset upload failed", error);
+    res.status(500).json({ error: "Unable to upload course file right now." });
+  }
+});
+
+app.delete("/api/admin/courses/:slug/asset", requireAdminAuth(), async (req, res) => {
+  const slug = req.params.slug;
+
+  try {
+    const course = await clearManagedCourseAssets(slug, req.adminUser);
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "course.asset.deleted",
+      entityType: "course",
+      entityId: slug,
+      metadata: {},
+    });
+    res.json({ course });
+  } catch (error) {
+    logServerError("Course asset delete failed", error);
+    res.status(500).json({ error: "Unable to remove course file right now." });
+  }
 });
 
 app.get("/api/admin/transactions", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
@@ -608,9 +662,44 @@ app.get("/api/download/:token", downloadRateLimit, async (req, res) => {
     return res.status(410).json({ error: "This download link has expired." });
   }
 
-  const course = findDigitalCourse(purchase.courseSlug);
-  const filePath = purchase.filePath || course?.filePath;
-  const fileName = purchase.fileName || course?.fileName;
+  const course = await getCourseForCheckout(purchase.courseSlug);
+  const fallbackCourse = findDigitalCourse(purchase.courseSlug);
+  const deliveryAsset =
+    purchase.deliveryAsset ||
+    (Array.isArray(course?.assets) ? course.assets.find((asset) => asset?.url) : null);
+  const filePath = purchase.filePath || course?.filePath || fallbackCourse?.filePath;
+  const fileName = resolveDownloadFileName({
+    asset: deliveryAsset,
+    fallbackFileName:
+      purchase.fileName ||
+      course?.fileName ||
+      fallbackCourse?.fileName ||
+      "dwbb-course-materials.txt",
+  });
+
+  if (deliveryAsset?.url) {
+    try {
+      const assetResponse = await fetch(deliveryAsset.url);
+
+      if (!assetResponse.ok) {
+        return res.status(502).json({ error: "Course materials are temporarily unavailable." });
+      }
+
+      const fileBuffer = Buffer.from(await assetResponse.arrayBuffer());
+      const contentType = getDownloadMimeType(fileName) || assetResponse.headers.get("content-type") || "application/octet-stream";
+      const encodedFileName = encodeURIComponent(fileName).replace(/['()]/g, escape).replace(/\*/g, "%2A");
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${fileName.replace(/"/g, "")}"; filename*=UTF-8''${encodedFileName}`);
+      res.setHeader("Content-Length", String(fileBuffer.byteLength));
+      res.setHeader("Cache-Control", "private, no-store, max-age=0");
+      res.setHeader("X-Download-Options", "noopen");
+      res.end(fileBuffer);
+      return;
+    } catch (error) {
+      logServerError(`Cloudinary download failed for ${purchase.reference}`, error);
+      return res.status(502).json({ error: "Course materials are temporarily unavailable." });
+    }
+  }
 
   if (!filePath || !fileName) {
     return res.status(404).json({ error: "Course materials are no longer available." });
@@ -683,6 +772,7 @@ async function verifyAndFulfill(reference, options = {}) {
   const inferredNetAmountKobo = Math.max(amountPaidKobo - paystackFeeKobo, 0);
   const targetAmountKobo = metadataTargetAmountKobo ?? recordedAttemptTargetAmountKobo ?? inferredNetAmountKobo;
   const processingFeeKobo = metadataProcessingFeeKobo ?? recordedAttemptProcessingFeeKobo ?? paystackFeeKobo;
+  const deliveryAsset = Array.isArray(course.assets) ? course.assets.find((asset) => asset?.url) || null : null;
 
   const purchases = await readPurchases();
   const existing = purchases.find((entry) => entry.reference === reference);
@@ -714,11 +804,13 @@ async function verifyAndFulfill(reference, options = {}) {
     coursePriceKobo: targetAmountKobo,
     processingFeeKobo,
     paidAt: new Date().toISOString(),
+    deliveryAsset,
     downloadToken,
     downloadBaseUrl: publicDownloadBaseUrl,
     expiresAt,
     emailDeliveryStatus: transaction.customer?.email ? "pending" : "skipped",
     emailPreviewUrl: null,
+    fileName: deliveryAsset?.fileName || course.fileName || null,
   };
 
   purchases.push(purchase);
@@ -1124,6 +1216,61 @@ function sanitizeCourseUpdates(payload) {
   }
 
   return updates;
+}
+
+function sanitizeAssetFileName(fileName) {
+  const trimmed = String(fileName || "").trim();
+  const sanitized = trimmed.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "");
+  return sanitized || "dwbb-course-materials.txt";
+}
+
+function ensureFileNameExtension(fileName, format) {
+  const normalizedFileName = String(fileName || "").trim();
+  const normalizedFormat = String(format || "").trim().replace(/^\./, "");
+
+  if (!normalizedFileName) {
+    return normalizedFormat ? `dwbb-course-materials.${normalizedFormat}` : "dwbb-course-materials";
+  }
+
+  if (!normalizedFormat || path.extname(normalizedFileName)) {
+    return normalizedFileName;
+  }
+
+  return `${normalizedFileName}.${normalizedFormat}`;
+}
+
+function resolveDownloadFileName({ asset, fallbackFileName }) {
+  if (!asset) {
+    return fallbackFileName;
+  }
+
+  const candidateName =
+    asset.fileName ||
+    asset.originalFilename ||
+    fallbackFileName ||
+    "dwbb-course-materials";
+
+  return ensureFileNameExtension(candidateName, asset.format);
+}
+
+function getDownloadMimeType(fileName) {
+  const extension = path.extname(String(fileName || "")).toLowerCase();
+
+  return (
+    {
+      ".csv": "text/csv; charset=utf-8",
+      ".doc": "application/msword",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".json": "application/json; charset=utf-8",
+      ".pdf": "application/pdf",
+      ".ppt": "application/vnd.ms-powerpoint",
+      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ".txt": "text/plain; charset=utf-8",
+      ".xls": "application/vnd.ms-excel",
+      ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".zip": "application/zip",
+    }[extension] || null
+  );
 }
 
 function getPaystackMode() {

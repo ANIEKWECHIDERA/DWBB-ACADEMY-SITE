@@ -64,6 +64,46 @@ export async function updateAdminCourse(user: User, slug: string, updates: Parti
   return payload.course;
 }
 
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Unable to read the selected file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function uploadAdminCourseAsset(user: User, slug: string, file: File) {
+  const dataUri = await readFileAsDataUrl(file);
+  const payload = await adminFetch<{ course: ManagedCourse }>(user, `/api/admin/courses/${slug}/asset`, {
+    method: "POST",
+    body: JSON.stringify({
+      dataUri,
+      fileName: file.name,
+    }),
+  });
+
+  return payload.course;
+}
+
+export async function deleteAdminCourseAsset(user: User, slug: string) {
+  const token = await user.getIdToken();
+  const response = await fetch(apiUrl(`/api/admin/courses/${slug}/asset`), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "Unable to remove the course file.");
+  }
+
+  const payload = await response.json();
+  return payload.course as ManagedCourse;
+}
+
 export async function reorderAdminCourses(user: User, slugs: string[]) {
   const payload = await adminFetch<{ courses: ManagedCourse[] }>(user, "/api/admin/courses/reorder", {
     method: "POST",

@@ -10,6 +10,7 @@ import type { AdminNavSection, AdminSection } from "@/features/admin/types";
 import { cloneCourseDraft, sourceCourseSlug } from "@/features/admin/utils";
 import {
   deleteAdminCourse,
+  deleteAdminCourseAsset,
   deleteAdminCustomers,
   deleteAdminTransactions,
   dismissAdminNotification,
@@ -26,6 +27,7 @@ import {
   reorderAdminCourses,
   syncAdminAuditLogs,
   updateAdminCourse,
+  uploadAdminCourseAsset,
   updateAdminUser,
   type AdminRange,
 } from "@/lib/admin-api";
@@ -451,6 +453,54 @@ export function useAdminConsole() {
     }
   }
 
+  async function handleUploadCourseAsset(file: File) {
+    if (!firebaseUser || !courseDraft) {
+      return;
+    }
+
+    try {
+      await runBusyAction("Uploading course file...", async () => {
+        const course = await uploadAdminCourseAsset(firebaseUser, selectedCourseSlug, file);
+        const nextCourses = courses.map((item) => (item.slug === selectedCourseSlug ? course : item));
+        setCourses(nextCourses);
+        selectCourse(course.slug, nextCourses);
+        pushToast({
+          title: "Course file updated",
+          description: `${file.name} is now attached to ${course.title}.`,
+        });
+      });
+    } catch (error) {
+      pushToast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Unable to upload the course file right now.",
+      });
+    }
+  }
+
+  async function handleDeleteCourseAsset() {
+    if (!firebaseUser || !courseDraft) {
+      return;
+    }
+
+    try {
+      await runBusyAction("Removing course file...", async () => {
+        const course = await deleteAdminCourseAsset(firebaseUser, selectedCourseSlug);
+        const nextCourses = courses.map((item) => (item.slug === selectedCourseSlug ? course : item));
+        setCourses(nextCourses);
+        selectCourse(course.slug, nextCourses);
+        pushToast({
+          title: "Course file removed",
+          description: `${course.title} no longer has a downloadable file attached.`,
+        });
+      });
+    } catch (error) {
+      pushToast({
+        title: "Remove failed",
+        description: error instanceof Error ? error.message : "Unable to remove the course file right now.",
+      });
+    }
+  }
+
   async function handleCourseDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id || !firebaseUser) return;
@@ -686,6 +736,8 @@ export function useAdminConsole() {
     handleGoogleSignIn,
     handleSaveCourse,
     handleDeleteCourse,
+    handleUploadCourseAsset,
+    handleDeleteCourseAsset,
     handleCourseDragEnd,
     handleInviteAdmin,
     handleDeleteTransactions,

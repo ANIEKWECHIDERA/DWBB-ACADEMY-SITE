@@ -60,7 +60,15 @@ export interface ManagedCourse {
   published: boolean;
   featured: boolean;
   order: number;
-  assets?: Array<{ publicId?: string; url?: string }>;
+  assets?: Array<{
+    publicId?: string;
+    url?: string;
+    fileName?: string;
+    originalFilename?: string;
+    format?: string;
+    bytes?: number | null;
+    resourceType?: string;
+  }>;
   updatedAt?: string;
   updatedBy?: string;
 }

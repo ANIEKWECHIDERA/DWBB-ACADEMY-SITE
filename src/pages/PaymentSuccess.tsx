@@ -147,7 +147,7 @@ export default function PaymentSuccess() {
               </div>
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Button asChild className="flex-1" variant="gold">
-                  <a href={result.downloadUrl} target="_blank" rel="noreferrer">
+                  <a download href={result.downloadUrl}>
                     Download Materials
                   </a>
                 </Button>

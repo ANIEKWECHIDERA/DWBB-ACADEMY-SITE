@@ -1,7 +1,8 @@
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { FileUp, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,8 +48,10 @@ export function AdminCoursesSection({
   courses,
   onChangeDraft,
   onDeleteCourse,
+  onDeleteCourseAsset,
   onDragEnd,
   onSaveCourse,
+  onUploadCourseAsset,
   pricingPreview,
   selectedCourseSlug,
   selectCourse,
@@ -57,8 +60,10 @@ export function AdminCoursesSection({
   courses: ManagedCourse[];
   onChangeDraft: (draft: ManagedCourse) => void;
   onDeleteCourse: () => Promise<void>;
+  onDeleteCourseAsset: () => Promise<void>;
   onDragEnd: (event: DragEndEvent) => Promise<void>;
   onSaveCourse: () => Promise<boolean>;
+  onUploadCourseAsset: (file: File) => Promise<void>;
   pricingPreview: ReturnType<typeof import("@/lib/paystackPricing").getCheckoutPricing> | null;
   selectedCourseSlug: string;
   selectCourse: (slug: string, sourceCourses?: ManagedCourse[]) => void;
@@ -66,6 +71,8 @@ export function AdminCoursesSection({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteAssetDialogOpen, setDeleteAssetDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!courseDraft) {
@@ -113,6 +120,18 @@ export function AdminCoursesSection({
       setMobileEditorOpen(false);
     }
   }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    await onUploadCourseAsset(file);
+    event.target.value = "";
+  }
+
+  const currentAsset = courseDraft?.assets?.[0] || null;
 
   const editorContent = courseDraft ? (
     <div className="space-y-6">
@@ -169,6 +188,51 @@ export function AdminCoursesSection({
         <ToggleField checked={courseDraft.published} label="Published" onChange={(checked) => onChangeDraft({ ...courseDraft, published: checked })} />
         <ToggleField checked={courseDraft.featured} label="Featured listing" onChange={(checked) => onChangeDraft({ ...courseDraft, featured: checked })} />
       </div>
+
+      <Field label="Downloadable Course File">
+        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <input
+            ref={fileInputRef}
+            accept=".txt,.pdf,.zip,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+            className="hidden"
+            onChange={handleFileChange}
+            type="file"
+          />
+
+          {currentAsset ? (
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+              <p className="text-sm font-semibold text-slate-950">
+                {currentAsset.fileName || currentAsset.originalFilename || "Attached file"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {currentAsset.bytes ? `${Math.max(currentAsset.bytes / 1024, 0.1).toFixed(1)} KB` : "Cloudinary asset"}
+              </p>
+              {currentAsset.url ? (
+                <a className="mt-2 inline-block text-xs font-medium text-brand-sky underline-offset-4 hover:underline" href={currentAsset.url} rel="noreferrer" target="_blank">
+                  Open current file
+                </a>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500">
+              No downloadable file attached yet.
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button className="rounded-lg shadow-none hover:translate-y-0" onClick={() => fileInputRef.current?.click()} type="button" variant="outline">
+              <FileUp className="h-4 w-4" />
+              {currentAsset ? "Replace File" : "Upload File"}
+            </Button>
+            {currentAsset ? (
+              <Button className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0" onClick={() => setDeleteAssetDialogOpen(true)} type="button" variant="ghost">
+                <Trash2 className="h-4 w-4" />
+                Remove File
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </Field>
     </div>
   ) : null;
 
@@ -262,6 +326,17 @@ export function AdminCoursesSection({
         onOpenChange={setDeleteDialogOpen}
         open={deleteDialogOpen}
         title="Delete this course?"
+      />
+      <ConfirmDialog
+        confirmLabel="Remove file"
+        description={courseDraft ? `The downloadable file attached to ${courseDraft.title} will be removed from Cloudinary and the course catalog.` : "The downloadable file will be removed."}
+        onConfirm={async () => {
+          await onDeleteCourseAsset();
+          setDeleteAssetDialogOpen(false);
+        }}
+        onOpenChange={setDeleteAssetDialogOpen}
+        open={deleteAssetDialogOpen}
+        title="Remove this course file?"
       />
     </div>
   );

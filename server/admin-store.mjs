@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 
 import { getCheckoutPricing } from "../src/lib/paystackPricing.js";
-import { destroyCloudinaryAssets } from "./cloudinary.mjs";
+import { destroyCloudinaryAssets, uploadCourseAsset } from "./cloudinary.mjs";
 import { digitalCourseCatalog } from "./course-catalog.mjs";
 import { getFirebaseAdminFirestore } from "./firebase-admin.mjs";
 
@@ -167,6 +167,68 @@ export async function deleteManagedCourse(slug) {
 
   await destroyCloudinaryAssets(publicIds);
   await firestore.collection(COLLECTIONS.courses).doc(slug).delete();
+}
+
+export async function replaceManagedCourseAsset(slug, { actor, dataUri, fileName }) {
+  const firestore = firestoreRequired();
+  const course = await getManagedCourse(slug);
+
+  if (!course) {
+    throw new Error("Course not found.");
+  }
+
+  const existingPublicIds = Array.isArray(course.assets)
+    ? course.assets.map((asset) => asset?.publicId).filter(Boolean)
+    : [];
+
+  const nextAsset = await uploadCourseAsset({
+    courseTitle: course.title,
+    dataUri,
+    fileName,
+  });
+
+  if (existingPublicIds.length > 0) {
+    await destroyCloudinaryAssets(existingPublicIds);
+  }
+
+  await firestore.collection(COLLECTIONS.courses).doc(slug).set(
+    {
+      assets: [nextAsset],
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor.email,
+    },
+    { merge: true },
+  );
+
+  return getManagedCourse(slug);
+}
+
+export async function clearManagedCourseAssets(slug, actor) {
+  const firestore = firestoreRequired();
+  const course = await getManagedCourse(slug);
+
+  if (!course) {
+    throw new Error("Course not found.");
+  }
+
+  const existingPublicIds = Array.isArray(course.assets)
+    ? course.assets.map((asset) => asset?.publicId).filter(Boolean)
+    : [];
+
+  if (existingPublicIds.length > 0) {
+    await destroyCloudinaryAssets(existingPublicIds);
+  }
+
+  await firestore.collection(COLLECTIONS.courses).doc(slug).set(
+    {
+      assets: [],
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor.email,
+    },
+    { merge: true },
+  );
+
+  return getManagedCourse(slug);
 }
 
 export async function getAdminUserByEmail(email) {

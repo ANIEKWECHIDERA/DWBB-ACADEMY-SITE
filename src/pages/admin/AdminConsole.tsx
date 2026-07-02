@@ -95,8 +95,10 @@ export default function AdminConsole() {
                     courses={admin.courses}
                     onChangeDraft={admin.setCourseDraft}
                     onDeleteCourse={admin.handleDeleteCourse}
+                    onDeleteCourseAsset={admin.handleDeleteCourseAsset}
                     onDragEnd={admin.handleCourseDragEnd}
                     onSaveCourse={admin.handleSaveCourse}
+                    onUploadCourseAsset={admin.handleUploadCourseAsset}
                     pricingPreview={admin.pricingPreview}
                     selectedCourseSlug={admin.selectedCourseSlug}
                     selectCourse={admin.selectCourse}
