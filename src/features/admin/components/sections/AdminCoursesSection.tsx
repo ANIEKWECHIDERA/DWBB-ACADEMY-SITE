@@ -78,6 +78,7 @@ export function AdminCoursesSection({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteAssetDialogOpen, setDeleteAssetDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const isSavingCourse = isBusy && mutationLabel.toLowerCase().includes("saving course");
 
   useEffect(() => {
     if (!courseDraft) {
@@ -286,11 +287,11 @@ export function AdminCoursesSection({
               </div>
             </ScrollArea>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <Button className="w-full rounded-lg shadow-none hover:translate-y-0 sm:w-auto" disabled={isBusy} onClick={onSaveCourse} variant="gold">
-                {isBusy && mutationLabel.toLowerCase().includes("saving course") ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
+              <Button className="w-full rounded-lg shadow-none hover:translate-y-0 sm:w-auto" disabled={!isDirty || isBusy} onClick={onSaveCourse} variant="gold">
+                {isSavingCourse ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
                 Save Course
               </Button>
-              <Button className="w-full rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0 sm:w-auto" disabled={isBusy} onClick={() => setDeleteDialogOpen(true)} variant="ghost">
+              <Button className="w-full rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0 sm:w-auto" disabled={!isDirty || isBusy} onClick={() => setDeleteDialogOpen(true)} variant="ghost">
                 {isBusy && mutationLabel.toLowerCase().includes("deleting course") ? <Spinner className="text-rose-700" size="sm" /> : null}
                 Hard Delete
               </Button>
@@ -305,18 +306,26 @@ export function AdminCoursesSection({
         <SheetContent className="shadow-none xl:hidden">
           {courseDraft ? (
             <>
+              {isSavingCourse ? (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90">
+                  <div className="flex flex-col items-center gap-3 text-center text-slate-600">
+                    <Spinner className="text-slate-500" size="lg" />
+                    <p className="text-sm font-medium">Saving course...</p>
+                  </div>
+                </div>
+              ) : null}
               <SheetHeader>
                 <SheetTitle>{courseDraft.title}</SheetTitle>
                 <SheetDescription>Edit course details, pricing, and listing state.</SheetDescription>
               </SheetHeader>
               <div className="flex-1 overflow-y-auto pr-1">{editorContent}</div>
               <SheetFooter>
-                <Button className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0" disabled={isBusy} onClick={() => setDeleteDialogOpen(true)} variant="ghost">
+                <Button className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0" disabled={!isDirty || isBusy} onClick={() => setDeleteDialogOpen(true)} variant="ghost">
                   {isBusy && mutationLabel.toLowerCase().includes("deleting course") ? <Spinner className="text-rose-700" size="sm" /> : null}
                   Hard Delete
                 </Button>
                 <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={!isDirty || isBusy} onClick={handleMobileSave} variant="gold">
-                  {isBusy && mutationLabel.toLowerCase().includes("saving course") ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
+                  {isSavingCourse ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
                   Save Course
                 </Button>
               </SheetFooter>

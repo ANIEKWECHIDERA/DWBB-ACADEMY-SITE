@@ -46,7 +46,7 @@ export function AdminLogsSection({
   userOptions: Array<{ label: string; value: string }>;
   setUserFilter: (value: string) => void;
 }) {
-  const [desktopView, setDesktopView] = useState<AuditView>("audit");
+  const [activeView, setActiveView] = useState<AuditView>("audit");
   const [selectedAuditId, setSelectedAuditId] = useState<string>(auditLogs[0]?.id || "");
   const [selectedLoginId, setSelectedLoginId] = useState<string>(loginLogs[0]?.id || "");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -55,8 +55,8 @@ export function AdminLogsSection({
   const [auditPage, setAuditPage] = useState(1);
   const [loginPage, setLoginPage] = useState(1);
 
-  const activeList = desktopView === "audit" ? auditLogs : loginLogs;
-  const activePage = desktopView === "audit" ? auditPage : loginPage;
+  const activeList = activeView === "audit" ? auditLogs : loginLogs;
+  const activePage = activeView === "audit" ? auditPage : loginPage;
   const pageCount = useMemo(() => {
     if (activeList.length === 0) {
       return 0;
@@ -168,45 +168,29 @@ export function AdminLogsSection({
         <>
           <div className="space-y-4 lg:hidden">
             <AdminPanel>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Audit Logs</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Audit Workspace</p>
+              <Tabs
+                className="mt-4"
+                items={["Audit Logs", "Login Activity"]}
+                onChange={(value) => setActiveView(value === "Login Activity" ? "login" : "audit")}
+                value={activeView === "login" ? "Login Activity" : "Audit Logs"}
+              />
               <div className="mt-4 space-y-3">
-                {auditLogs.length === 0 ? (
-                  <EmptyState title="No audit logs yet" description="Action logs will appear here as admins use the console." compact />
-                ) : (
-                  paginatedAuditLogs.map((item) => (
-                    <button key={item.id} className="w-full rounded-lg border border-slate-200 p-4 text-left" onClick={() => openMobileLog("audit", item.id)} type="button">
-                      <p className="text-sm font-semibold text-slate-950">{item.action}</p>
-                      <p className="mt-1 text-xs text-slate-500 sm:text-sm">{item.actorEmail || "System"}</p>
-                  <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">
-                    {item.entityType} | {item.entityId} | {formatDate(item.createdAt)}
-                  </p>
-                </button>
-                  ))
-                )}
-              </div>
-              {auditLogs.length > 0 ? (
-                <div className="mt-4">
-                  <PaginationControls
-                    currentPage={auditPage}
-                    itemLabel="audit logs"
-                    onPageChange={setAuditPage}
-                    onPageSizeChange={(value) => {
-                      setPageSize(value as (typeof PAGE_SIZE_OPTIONS)[number]);
-                      setAuditPage(1);
-                      setLoginPage(1);
-                    }}
-                    pageCount={pageSize === "all" ? 1 : Math.max(1, Math.ceil(auditLogs.length / Number(pageSize)))}
-                    pageSize={pageSize}
-                    totalCount={auditLogs.length}
-                  />
-                </div>
-              ) : null}
-            </AdminPanel>
-
-            <AdminPanel>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Login Activity</p>
-              <div className="mt-4 space-y-3">
-                {loginLogs.length === 0 ? (
+                {activeView === "audit" ? (
+                  auditLogs.length === 0 ? (
+                    <EmptyState title="No audit logs yet" description="Action logs will appear here as admins use the console." compact />
+                  ) : (
+                    paginatedAuditLogs.map((item) => (
+                      <button key={item.id} className="w-full rounded-lg border border-slate-200 p-4 text-left" onClick={() => openMobileLog("audit", item.id)} type="button">
+                        <p className="text-sm font-semibold text-slate-950">{item.action}</p>
+                        <p className="mt-1 text-xs text-slate-500 sm:text-sm">{item.actorEmail || "System"}</p>
+                        <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">
+                          {item.entityType} | {item.entityId} | {formatDate(item.createdAt)}
+                        </p>
+                      </button>
+                    ))
+                  )
+                ) : loginLogs.length === 0 ? (
                   <EmptyState title="No login activity yet" description="Successful admin sign-ins will be listed here." compact />
                 ) : (
                   paginatedLoginLogs.map((item) => (
@@ -218,20 +202,27 @@ export function AdminLogsSection({
                   ))
                 )}
               </div>
-              {loginLogs.length > 0 ? (
+              {activeList.length > 0 ? (
                 <div className="mt-4">
                   <PaginationControls
-                    currentPage={loginPage}
-                    itemLabel="login records"
-                    onPageChange={setLoginPage}
+                    currentPage={activePage}
+                    itemLabel={activeView === "audit" ? "audit logs" : "login records"}
+                    onPageChange={(page) => {
+                      if (activeView === "audit") {
+                        setAuditPage(page);
+                        return;
+                      }
+
+                      setLoginPage(page);
+                    }}
                     onPageSizeChange={(value) => {
                       setPageSize(value as (typeof PAGE_SIZE_OPTIONS)[number]);
                       setAuditPage(1);
                       setLoginPage(1);
                     }}
-                    pageCount={pageSize === "all" ? 1 : Math.max(1, Math.ceil(loginLogs.length / Number(pageSize)))}
+                    pageCount={pageCount}
                     pageSize={pageSize}
-                    totalCount={loginLogs.length}
+                    totalCount={activeList.length}
                   />
                 </div>
               ) : null}
@@ -249,12 +240,12 @@ export function AdminLogsSection({
               <Tabs
                 className="mt-6"
                 items={["Audit Logs", "Login Activity"]}
-                onChange={(value) => setDesktopView(value === "Login Activity" ? "login" : "audit")}
-                value={desktopView === "login" ? "Login Activity" : "Audit Logs"}
+                onChange={(value) => setActiveView(value === "Login Activity" ? "login" : "audit")}
+                value={activeView === "login" ? "Login Activity" : "Audit Logs"}
               />
 
               <div className="mt-6 min-h-0 flex-1">
-                {desktopView === "audit" ? (
+                {activeView === "audit" ? (
                   auditLogs.length === 0 ? (
                     <EmptyState title="No audit logs yet" description="Action logs will appear here as admins use the console." compact />
                   ) : (
@@ -302,9 +293,9 @@ export function AdminLogsSection({
                 <div className="mt-4">
                   <PaginationControls
                     currentPage={activePage}
-                    itemLabel={desktopView === "audit" ? "audit logs" : "login records"}
+                    itemLabel={activeView === "audit" ? "audit logs" : "login records"}
                     onPageChange={(page) => {
-                      if (desktopView === "audit") {
+                      if (activeView === "audit") {
                         setAuditPage(page);
                         return;
                       }
@@ -325,7 +316,7 @@ export function AdminLogsSection({
             </AdminPanel>
 
             <AdminPanel className="flex h-full flex-col">
-              {desktopView === "audit" ? (
+              {activeView === "audit" ? (
                 selectedAudit ? (
                   <>
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Preview</p>

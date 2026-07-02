@@ -13,7 +13,6 @@ dist-ssr
 *.local
 .env
 .env.*
-!.env.example
 server/.data/*
 !server/.data/.gitkeep
 
