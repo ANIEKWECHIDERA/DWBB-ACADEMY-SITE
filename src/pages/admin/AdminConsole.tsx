@@ -2,7 +2,10 @@ import { Button } from "@/components/ui/button";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
 import { AdminHeader } from "@/features/admin/components/AdminHeader";
-import { AdminPanel, EmptyState } from "@/features/admin/components/AdminPrimitives";
+import {
+  AdminPanel,
+  EmptyState,
+} from "@/features/admin/components/AdminPrimitives";
 import { AdminSidebar } from "@/features/admin/components/AdminSidebar";
 import { AdminAdminsSection } from "@/features/admin/components/sections/AdminAdminsSection";
 import { AdminCoursesSection } from "@/features/admin/components/sections/AdminCoursesSection";
@@ -32,16 +35,25 @@ export default function AdminConsole() {
       <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(255,201,76,0.2),_transparent_40%),linear-gradient(180deg,_#081529_0%,_#0d223f_100%)] px-4 py-10 text-white">
         <div className="mx-auto flex min-h-[80vh] max-w-5xl items-center justify-center">
           <AdminPanel className="w-full max-w-xl border-white/10 bg-white/95 text-slate-950 sm:p-10">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-gold">DWBB Admin</p>
-            <h1 className="mt-4 text-4xl font-bold text-slate-950">Secure console access</h1>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-gold">
+              DWBB Admin
+            </p>
+            <h1 className="mt-4 text-4xl font-bold text-slate-950">
+              Secure console access
+            </h1>
             <p className="mt-4 text-base leading-8 text-slate-600">
-              Sign in with Google to access the academy console. The admin workspace stays hidden until Firebase authentication
-              succeeds and your email is approved on the server.
+              Sign in with Google to access the academy console.
             </p>
             {admin.authorizationError ? (
-              <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{admin.authorizationError}</div>
+              <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                {admin.authorizationError}
+              </div>
             ) : null}
-            <Button className="mt-8 w-full rounded-lg shadow-none hover:translate-y-0" onClick={admin.handleGoogleSignIn} variant="gold">
+            <Button
+              className="mt-8 w-full rounded-lg shadow-none hover:translate-y-0"
+              onClick={admin.handleGoogleSignIn}
+              variant="gold"
+            >
               Continue with Google
             </Button>
           </AdminPanel>
@@ -51,7 +63,11 @@ export default function AdminConsole() {
   }
 
   return (
-    <SidebarProvider className="h-screen overflow-hidden bg-slate-100" onOpenChange={admin.setSidebarOpen} open={admin.sidebarOpen}>
+    <SidebarProvider
+      className="h-screen overflow-hidden bg-slate-100"
+      onOpenChange={admin.setSidebarOpen}
+      open={admin.sidebarOpen}
+    >
       <div className="flex h-screen w-full overflow-hidden">
         <AdminSidebar
           activeSection={admin.activeSection}
@@ -83,15 +99,27 @@ export default function AdminConsole() {
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-100/75 backdrop-blur-[1px]">
                 <div className="flex flex-col items-center gap-3 text-center text-slate-600">
                   <Spinner className="text-slate-500" size="lg" />
-                  <p className="text-sm font-medium">{admin.mutating ? admin.mutationLabel : "Refreshing data..."}</p>
+                  <p className="text-sm font-medium">
+                    {admin.mutating
+                      ? admin.mutationLabel
+                      : "Refreshing data..."}
+                  </p>
                 </div>
               </div>
             ) : null}
 
             <div className="h-full overflow-y-auto pb-8 pr-1">
-              <div className={admin.isPageBusy ? "pointer-events-none select-none" : ""}>
+              <div
+                className={
+                  admin.isPageBusy ? "pointer-events-none select-none" : ""
+                }
+              >
                 {admin.activeSection === "overview" ? (
-                  <AdminOverviewSection dashboard={admin.dashboard} range={admin.overviewRange} setRange={admin.setOverviewRange} />
+                  <AdminOverviewSection
+                    dashboard={admin.dashboard}
+                    range={admin.overviewRange}
+                    setRange={admin.setOverviewRange}
+                  />
                 ) : null}
 
                 {admin.activeSection === "courses" ? (
@@ -116,10 +144,14 @@ export default function AdminConsole() {
                   <AdminNotificationsSection
                     notifications={admin.notifications}
                     onDismissNotification={admin.handleDismissNotification}
-                    onMarkAllNotificationsRead={admin.handleMarkAllNotificationsRead}
+                    onMarkAllNotificationsRead={
+                      admin.handleMarkAllNotificationsRead
+                    }
                     onNotificationStatus={admin.handleNotificationStatus}
                     session={admin.session}
-                    setActiveSection={() => admin.setActiveSection("transactions")}
+                    setActiveSection={() =>
+                      admin.setActiveSection("transactions")
+                    }
                     unreadNotifications={admin.unreadNotifications}
                   />
                 ) : null}
@@ -166,14 +198,30 @@ export default function AdminConsole() {
                     inviteEmail={admin.inviteEmail}
                     inviteEmailValid={admin.inviteEmailValid}
                     inviteRole={admin.inviteRole}
+                    isBusy={admin.mutating}
+                    mutationLabel={admin.mutationLabel}
+                    onDeleteAdmin={admin.handleDeleteAdminDirectoryUser}
                     onInviteAdmin={admin.handleInviteAdmin}
+                    onUpdateAdmin={admin.handleUpdateAdminDirectoryUser}
+                    session={admin.session}
                     setInviteEmail={admin.setInviteEmail}
                     setInviteRole={admin.setInviteRole}
                   />
                 ) : null}
 
-                {!["overview", "courses", "notifications", "transactions", "customers", "logs", "admins"].includes(admin.activeSection) ? (
-                  <EmptyState title="Section unavailable" description="This admin section is not available right now." />
+                {![
+                  "overview",
+                  "courses",
+                  "notifications",
+                  "transactions",
+                  "customers",
+                  "logs",
+                  "admins",
+                ].includes(admin.activeSection) ? (
+                  <EmptyState
+                    title="Section unavailable"
+                    description="This admin section is not available right now."
+                  />
                 ) : null}
               </div>
             </div>

@@ -243,4 +243,19 @@ export async function updateAdminUser(user: User, email: string, role: "admin" |
   return payload.user;
 }
 
+export async function deleteAdminUser(user: User, email: string) {
+  const token = await user.getIdToken();
+  const response = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(email)}`), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "Unable to delete this admin.");
+  }
+}
+
 export type { AdminRange };

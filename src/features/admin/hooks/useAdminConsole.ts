@@ -13,6 +13,7 @@ import {
   deleteAdminCourseAsset,
   deleteAdminCustomers,
   deleteAdminTransactions,
+  deleteAdminUser,
   dismissAdminNotification,
   getAdminCourses,
   getAdminCustomers,
@@ -38,6 +39,7 @@ import type {
   AdminDashboardMetrics,
   AdminDirectoryUser,
   AdminNotification,
+  AdminRole,
   AdminSession,
   AdminTransaction,
   AuditLogItem,
@@ -545,6 +547,43 @@ export function useAdminConsole() {
     }
   }
 
+  async function handleUpdateAdminDirectoryUser(email: string, role: AdminRole, active: boolean) {
+    if (!firebaseUser || !email.trim()) return;
+
+    try {
+      await runBusyAction("Saving admin access...", async () => {
+        const user = await updateAdminUser(firebaseUser, email, role, active);
+        setAdminUsers((current) => {
+          const filtered = current.filter((item) => item.email !== user.email);
+          return [...filtered, user].sort((a, b) => a.email.localeCompare(b.email));
+        });
+        pushToast({ title: "Admin updated", description: `${user.email} access was updated successfully.` });
+      });
+    } catch (error) {
+      pushToast({
+        title: "Update failed",
+        description: error instanceof Error ? error.message : "Unable to update this admin right now.",
+      });
+    }
+  }
+
+  async function handleDeleteAdminDirectoryUser(email: string) {
+    if (!firebaseUser || !email.trim()) return;
+
+    try {
+      await runBusyAction("Deleting admin...", async () => {
+        await deleteAdminUser(firebaseUser, email);
+        setAdminUsers((current) => current.filter((item) => item.email !== email));
+        pushToast({ title: "Admin deleted", description: `${email} was removed from the admin directory.` });
+      });
+    } catch (error) {
+      pushToast({
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Unable to delete this admin right now.",
+      });
+    }
+  }
+
   function toggleSelection(current: string[], value: string) {
     return current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
   }
@@ -740,6 +779,8 @@ export function useAdminConsole() {
     handleDeleteCourseAsset,
     handleCourseDragEnd,
     handleInviteAdmin,
+    handleUpdateAdminDirectoryUser,
+    handleDeleteAdminDirectoryUser,
     handleDeleteTransactions,
     handleDeleteCustomers,
     handleNotificationStatus,

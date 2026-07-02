@@ -10,6 +10,7 @@ import nodemailer from "nodemailer";
 
 import {
   clearManagedCourseAssets,
+  deleteAdminUserByEmail,
   deleteManagedCourse,
   dismissNotification,
   deleteCustomersByEmail,
@@ -509,6 +510,36 @@ app.put("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true }), a
   });
 
   res.json({ user });
+});
+
+app.delete("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
+  const email = normalizeEmail(req.params.email);
+
+  if (!email) {
+    return res.status(400).json({ error: "A valid admin email is required." });
+  }
+
+  if (email === normalizeEmail(req.adminUser.email)) {
+    return res.status(400).json({ error: "You cannot delete your own admin access." });
+  }
+
+  if (getSuperAdminEmails().includes(email)) {
+    return res.status(400).json({ error: "Primary super admin access cannot be deleted here." });
+  }
+
+  await deleteAdminUserByEmail(email);
+  clearCachedAdminUser(email);
+
+  await recordAuditLogSafe({
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    action: "admin.deleted",
+    entityType: "admin_user",
+    entityId: email,
+    metadata: {},
+  });
+
+  res.status(204).end();
 });
 
 app.get("/api/payments/debug/attempts", requirePaymentDebug, async (_req, res) => {

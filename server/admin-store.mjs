@@ -264,6 +264,13 @@ export async function upsertAdminUser({ email, role, invitedBy, active = true })
   return getAdminUserByEmail(normalizedEmail);
 }
 
+export async function deleteAdminUserByEmail(email) {
+  const firestore = firestoreRequired();
+  const normalizedEmail = normalizeEmail(email);
+
+  await firestore.collection(COLLECTIONS.adminUsers).doc(normalizedEmail).delete();
+}
+
 export async function recordAdminLogin({ email, role, uid }) {
   const firestore = firestoreRequired();
   await firestore.collection(COLLECTIONS.loginLogs).add({

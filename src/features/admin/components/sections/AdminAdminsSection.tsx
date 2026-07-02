@@ -1,17 +1,27 @@
+import { useEffect, useMemo, useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import type { AdminDirectoryUser } from "@/types/admin";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import type { AdminDirectoryUser, AdminRole, AdminSession } from "@/types/admin";
 
-import { AdminPanel, EmptyState, Field } from "../AdminPrimitives";
+import { AdminPanel, ConfirmDialog, EmptyState, Field, ToggleField } from "../AdminPrimitives";
 
 export function AdminAdminsSection({
   adminUsers,
   inviteEmail,
   inviteEmailValid,
   inviteRole,
+  isBusy,
+  mutationLabel,
+  onDeleteAdmin,
   onInviteAdmin,
+  onUpdateAdmin,
+  session,
   setInviteEmail,
   setInviteRole,
 }: {
@@ -19,38 +29,114 @@ export function AdminAdminsSection({
   inviteEmail: string;
   inviteEmailValid: boolean;
   inviteRole: "admin" | "super_admin";
+  isBusy: boolean;
+  mutationLabel: string;
+  onDeleteAdmin: (email: string) => Promise<void>;
   onInviteAdmin: () => Promise<void>;
+  onUpdateAdmin: (email: string, role: AdminRole, active: boolean) => Promise<void>;
+  session: AdminSession | null;
   setInviteEmail: (value: string) => void;
   setInviteRole: (role: "admin" | "super_admin") => void;
 }) {
+  const [mobileView, setMobileView] = useState<"invite" | "directory">("invite");
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState("");
+  const [draftRole, setDraftRole] = useState<AdminRole>("admin");
+  const [draftActive, setDraftActive] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const selectedUser = useMemo(() => adminUsers.find((user) => user.email === selectedEmail) || null, [adminUsers, selectedEmail]);
+  const isSelf = selectedUser?.email === session?.user.email;
+  const isSavingAdmin = isBusy && mutationLabel.toLowerCase().includes("saving admin access");
+  const isDeletingAdmin = isBusy && mutationLabel.toLowerCase().includes("deleting admin");
+  const isDirectoryDirty = selectedUser ? selectedUser.role !== draftRole || selectedUser.active !== draftActive : false;
+
+  useEffect(() => {
+    if (!selectedUser) {
+      return;
+    }
+
+    setDraftRole(selectedUser.role);
+    setDraftActive(selectedUser.active);
+  }, [selectedUser]);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setMobileSheetOpen(false);
+    }
+  }, [selectedUser]);
+
+  async function handleSaveAdmin() {
+    if (!selectedUser) {
+      return;
+    }
+
+    await onUpdateAdmin(selectedUser.email, draftRole, draftActive);
+    setMobileSheetOpen(false);
+  }
+
+  async function handleDeleteSelectedAdmin() {
+    if (!selectedUser) {
+      return;
+    }
+
+    await onDeleteAdmin(selectedUser.email);
+    setDeleteDialogOpen(false);
+    setMobileSheetOpen(false);
+    setSelectedEmail("");
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <AdminPanel>
+      <div className="lg:hidden">
+        <AdminPanel className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Admin Workspace</p>
+          <Tabs
+            className="mt-4"
+            items={["Invite", "Directory"]}
+            onChange={(value) => setMobileView(value === "Directory" ? "directory" : "invite")}
+            value={mobileView === "directory" ? "Directory" : "Invite"}
+          />
+        </AdminPanel>
+      </div>
+
+      <AdminPanel className={cn("lg:block", mobileView === "invite" ? "block" : "hidden lg:block")}>
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Onboard Admin</p>
         <div className="mt-6 space-y-4">
           <Field label="Google account email">
             <Input className="rounded-lg" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} />
           </Field>
           <Field label="Role">
-            <Select className="rounded-lg" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "admin" | "super_admin")}>
+            <Select className="rounded-lg" onChange={(event) => setInviteRole(event.target.value as "admin" | "super_admin")} value={inviteRole}>
               <option value="admin">Admin</option>
               <option value="super_admin">Super Admin</option>
             </Select>
           </Field>
-          <Button className="w-full rounded-lg shadow-none hover:translate-y-0 disabled:bg-slate-200 disabled:text-slate-400" disabled={!inviteEmailValid} onClick={onInviteAdmin} variant="gold">
+          <Button className="w-full rounded-lg shadow-none hover:translate-y-0 disabled:bg-slate-200 disabled:text-slate-400" disabled={!inviteEmailValid || isBusy} onClick={onInviteAdmin} variant="gold">
+            {isSavingAdmin ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
             Save Access
           </Button>
         </div>
       </AdminPanel>
 
-      <AdminPanel>
+      <AdminPanel className={cn("lg:block", mobileView === "directory" ? "block" : "hidden lg:block")}>
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Current Admin Directory</p>
         <div className="mt-6 space-y-3">
           {adminUsers.length === 0 ? (
             <EmptyState title="No additional admins yet" description="Invite admins here once the team is ready to access the console." compact />
           ) : (
             adminUsers.map((user) => (
-              <div key={user.email} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                key={user.email}
+                className="flex w-full flex-col gap-2 rounded-lg border border-slate-200 p-4 text-left transition hover:border-slate-300 sm:flex-row sm:items-center sm:justify-between"
+                onClick={() => {
+                  if (window.matchMedia("(max-width: 1023px)").matches) {
+                    setSelectedEmail(user.email);
+                    setMobileSheetOpen(true);
+                  }
+                }}
+                type="button"
+              >
                 <div>
                   <p className="font-semibold text-slate-950">{user.email}</p>
                   <p className="mt-1 text-sm text-slate-500">{user.role.replace("_", " ")}</p>
@@ -58,11 +144,62 @@ export function AdminAdminsSection({
                 <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold", user.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700")}>
                   {user.active ? "Active" : "Disabled"}
                 </span>
-              </div>
+              </button>
             ))
           )}
         </div>
       </AdminPanel>
+
+      <Sheet onOpenChange={setMobileSheetOpen} open={mobileSheetOpen}>
+        <SheetContent className="lg:hidden">
+          {selectedUser ? (
+            <>
+              <SheetHeader>
+                <SheetTitle>{selectedUser.email}</SheetTitle>
+                <SheetDescription>Update access level, active status, or remove this admin entirely.</SheetDescription>
+              </SheetHeader>
+              <div className="flex-1 space-y-6 overflow-y-auto pr-1">
+                <Field label="Access Level">
+                  <Select className="rounded-lg" disabled={isBusy || isSelf} onChange={(event) => setDraftRole(event.target.value as AdminRole)} value={draftRole}>
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </Select>
+                </Field>
+                <ToggleField checked={draftActive} label="Admin is active" onChange={setDraftActive} />
+                {isSelf ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                    Your current admin account cannot be edited or deleted from this mobile directory sheet.
+                  </div>
+                ) : null}
+              </div>
+              <SheetFooter>
+                <Button
+                  className="rounded-lg border border-rose-200 bg-white text-rose-700 shadow-none hover:bg-rose-50 hover:translate-y-0"
+                  disabled={isBusy || isSelf}
+                  onClick={() => setDeleteDialogOpen(true)}
+                  variant="ghost"
+                >
+                  {isDeletingAdmin ? <Spinner className="text-rose-700" size="sm" /> : null}
+                  Delete Admin
+                </Button>
+                <Button className="rounded-lg shadow-none hover:translate-y-0" disabled={!isDirectoryDirty || isBusy || isSelf} onClick={handleSaveAdmin} variant="gold">
+                  {isSavingAdmin ? <Spinner className="border-deep-blue border-r-transparent" size="sm" /> : null}
+                  Save Changes
+                </Button>
+              </SheetFooter>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+
+      <ConfirmDialog
+        confirmLabel="Delete admin"
+        description={selectedUser ? `${selectedUser.email} will be removed from the admin directory.` : "This admin will be removed from the admin directory."}
+        onConfirm={handleDeleteSelectedAdmin}
+        onOpenChange={setDeleteDialogOpen}
+        open={deleteDialogOpen}
+        title="Delete this admin?"
+      />
     </div>
   );
 }
