@@ -49,4 +49,5 @@ export interface Testimonial {
   text: string;
   rating: number;
   avatarInitials: string;
+  imageUrl?: string;
 }

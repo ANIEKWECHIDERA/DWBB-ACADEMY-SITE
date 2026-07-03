@@ -7,19 +7,19 @@ import type { Course } from "@/types/course";
 
 export function FeaturedCoursesSection({ courses }: { courses: Course[] }) {
   return (
-    <section className="pb-20">
+    <section className="pb-16 sm:pb-20">
       <div className="container-shell">
         <SectionHeader
           eyebrow="Popular Tracks"
           heading="Our Most Popular Courses"
           subtext="Choose a path that fits your goals. All courses are beginner-friendly."
         />
-        <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-10 grid gap-5 sm:mt-12 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {courses.filter((course) => course.featured !== false).map((course) => (
             <CourseCard key={course.id} course={course} />
           ))}
         </div>
-        <div className="mt-10 text-center">
+        <div className="mt-8 text-center sm:mt-10">
           <Button asChild variant="ghost" className="rounded-full border border-slate-200 bg-white">
             <Link to="/courses">View All Courses</Link>
           </Button>

@@ -20,11 +20,11 @@ export function SectionHeader({
           {eyebrow}
         </p>
       ) : null}
-      <h2 className={cn("mt-3 text-3xl font-bold leading-tight sm:text-4xl", light ? "text-white" : "text-slate-950")}>
+      <h2 className={cn("mt-3 text-2xl font-bold leading-tight sm:text-4xl", light ? "text-white" : "text-slate-950")}>
         {heading}
       </h2>
       {subtext ? (
-        <p className={cn("mt-4 text-base leading-7 sm:text-lg", light ? "text-white/75" : "text-slate-600")}>{subtext}</p>
+        <p className={cn("mt-4 text-sm leading-7 sm:text-lg", light ? "text-white/75" : "text-slate-600")}>{subtext}</p>
       ) : null}
     </div>
   );

@@ -345,7 +345,10 @@ export function registerAdminRoutes(
           .json({ error: "A valid notification status is required." });
       }
 
-      const notification = await updateNotificationStatus(req.params.id, status);
+      const notification = await updateNotificationStatus(
+        req.params.id,
+        status,
+      );
       if (notification) {
         await adminRealtime.broadcastNotificationUpdated(notification);
       }

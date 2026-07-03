@@ -4,10 +4,10 @@ import { testimonials } from "@/data/testimonials";
 
 export function TestimonialsSection() {
   return (
-    <section className="py-20">
+    <section className="py-16 sm:py-20">
       <div className="container-shell">
         <SectionHeader eyebrow="Success Stories" heading="What our learners say after the transformation" />
-        <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-10 grid gap-5 sm:mt-12 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {testimonials.slice(0, 3).map((testimonial) => (
             <TestimonialCard key={testimonial.id} testimonial={testimonial} />
           ))}

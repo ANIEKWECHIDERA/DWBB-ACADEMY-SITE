@@ -10,13 +10,13 @@ const values = [
 
 export function ValuesSection() {
   return (
-    <section className="bg-white py-20">
+    <section className="bg-white py-16 sm:py-20">
       <div className="container-shell">
         <SectionHeader eyebrow="Values" heading="What guides the way we teach and build" />
-        <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-10 grid gap-5 sm:mt-12 sm:gap-6 md:grid-cols-2 xl:grid-cols-4">
           {values.map((value) => (
-            <Card key={value.title} className="p-6">
-              <h3 className="text-2xl font-bold text-slate-950">{value.title}</h3>
+            <Card key={value.title} className="p-5 sm:p-6">
+              <h3 className="text-xl font-bold text-slate-950 sm:text-2xl">{value.title}</h3>
               <p className="mt-3 text-sm leading-7 text-slate-600">{value.description}</p>
             </Card>
           ))}

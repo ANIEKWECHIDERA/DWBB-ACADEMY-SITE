@@ -4,17 +4,21 @@ import type { Testimonial } from "@/types/course";
 
 export function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
   return (
-    <Card className="h-full p-6">
-      <div className="flex items-center gap-4">
-        <Avatar initials={testimonial.avatarInitials} />
+    <Card className="h-full p-5 sm:p-6">
+      <div className="flex items-center gap-3 sm:gap-4">
+        <Avatar
+          alt={testimonial.name}
+          initials={testimonial.avatarInitials}
+          src={testimonial.imageUrl}
+        />
         <div>
-          <p className="font-display text-lg font-semibold text-slate-950">{testimonial.name}</p>
+          <p className="font-display text-base font-semibold text-slate-950 sm:text-lg">{testimonial.name}</p>
           <p className="text-sm text-slate-500">{testimonial.role}</p>
           <p className="text-xs uppercase tracking-[0.16em] text-brand-gold">{testimonial.course}</p>
         </div>
       </div>
-      <p className="mt-5 text-sm leading-7 text-slate-600">"{testimonial.text}"</p>
-      <p className="mt-5 text-brand-gold">{"★".repeat(testimonial.rating)}</p>
+      <p className="mt-4 text-sm leading-6 text-slate-600 sm:mt-5 sm:leading-7">"{testimonial.text}"</p>
+      <p className="mt-4 text-brand-gold sm:mt-5">{"★".repeat(testimonial.rating)}</p>
     </Card>
   );
 }

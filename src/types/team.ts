@@ -5,4 +5,5 @@ export interface TeamMember {
   bio: string;
   specialization: string;
   avatarInitials: string;
+  imageUrl?: string;
 }

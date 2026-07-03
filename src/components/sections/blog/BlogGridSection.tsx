@@ -18,10 +18,10 @@ export function BlogGridSection() {
   }, [active]);
 
   return (
-    <section className="py-20">
+    <section className="py-16 sm:py-20">
       <div className="container-shell">
         <Tabs className="justify-center" value={active} onChange={(value) => setActive(value as (typeof filters)[number])} items={[...filters]} />
-        <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-10 grid gap-5 sm:mt-12 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {posts.map((post) => (
             <BlogCard key={post.id} post={post} />
           ))}

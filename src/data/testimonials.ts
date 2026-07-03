@@ -9,6 +9,8 @@ export const testimonials: Testimonial[] = [
     text: "DWBB Academy gave me the practical skills I needed to break into data analytics. Within 3 months of graduating, I landed my first role at a fintech company.",
     rating: 5,
     avatarInitials: "AO",
+    imageUrl:
+      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "2",
@@ -18,6 +20,8 @@ export const testimonials: Testimonial[] = [
     text: "The project-based approach is incredible. I built 4 real websites during the course and now freelance full-time. Best investment I've made in myself.",
     rating: 5,
     avatarInitials: "EN",
+    imageUrl:
+      "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "3",
@@ -27,6 +31,8 @@ export const testimonials: Testimonial[] = [
     text: "I came in knowing nothing about AI. The instructors made complex topics accessible and I now automate workflows at my company saving hours every week.",
     rating: 5,
     avatarInitials: "FA",
+    imageUrl:
+      "https://images.unsplash.com/photo-1542204625-de293a2f8ff0?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "4",
@@ -36,6 +42,8 @@ export const testimonials: Testimonial[] = [
     text: "Published my first app on Google Play 2 weeks after completing the course. The mentorship was exceptional and the support continued even after graduation.",
     rating: 5,
     avatarInitials: "CI",
+    imageUrl:
+      "https://images.unsplash.com/photo-1504257432389-52343af06ae3?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "5",
@@ -45,5 +53,7 @@ export const testimonials: Testimonial[] = [
     text: "The Machine Learning course is thorough and practical. I went from zero Python to building classification models in 6 weeks. Highly recommended.",
     rating: 5,
     avatarInitials: "NE",
+    imageUrl:
+      "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=400&q=80",
   },
 ];

@@ -36,12 +36,12 @@ export function ContactFormSection() {
   };
 
   return (
-    <section className="py-20">
-      <div className="container-shell grid gap-8 lg:grid-cols-2">
-        <Card className="p-8">
+    <section className="py-16 sm:py-20">
+      <div className="container-shell grid gap-6 sm:gap-8 lg:grid-cols-2">
+        <Card className="p-6 sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-gold">Contact Info</p>
-          <a className="mt-5 inline-flex items-center gap-3 font-display text-3xl font-bold text-deep-blue" href={buildWhatsAppUrl()} target="_blank" rel="noreferrer">
-            <MessageCircle className="h-8 w-8 text-[#25D366]" />
+          <a className="mt-5 inline-flex items-center gap-3 font-display text-2xl font-bold text-deep-blue sm:text-3xl" href={buildWhatsAppUrl()} target="_blank" rel="noreferrer">
+            <MessageCircle className="h-7 w-7 text-[#25D366] sm:h-8 sm:w-8" />
             +234 810 625 8080
           </a>
           <div className="mt-8 space-y-3 text-slate-600">
@@ -57,7 +57,7 @@ export function ContactFormSection() {
           </div>
         </Card>
 
-        <Card className="p-8">
+        <Card className="p-6 sm:p-8">
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <Label htmlFor="fullName">Full Name *</Label>
