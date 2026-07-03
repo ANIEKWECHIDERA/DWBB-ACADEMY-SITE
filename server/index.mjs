@@ -38,7 +38,11 @@ import {
   upsertAdminUser,
 } from "./admin-store.mjs";
 import { digitalCourseCatalog, findDigitalCourse } from "./course-catalog.mjs";
-import { getFirebaseAdminAuth, getFirebaseAdminFirestore, isFirebaseAdminConfigured } from "./firebase-admin.mjs";
+import {
+  getFirebaseAdminAuth,
+  getFirebaseAdminFirestore,
+  isFirebaseAdminConfigured,
+} from "./firebase-admin.mjs";
 import { childLogger, logger } from "./logger.mjs";
 import { getCheckoutPricing } from "../src/lib/paystackPricing.js";
 
@@ -48,10 +52,12 @@ const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 const port = Number(process.env.PORT || process.env.SERVER_PORT || 8787);
 const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
-const publicApiBaseUrl = process.env.PUBLIC_API_BASE_URL || process.env.SERVER_PUBLIC_URL || "";
+const publicApiBaseUrl =
+  process.env.PUBLIC_API_BASE_URL || process.env.SERVER_PUBLIC_URL || "";
 const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
 const paystackPublicKey = process.env.PAYSTACK_PUBLIC_KEY;
-const enablePaymentDebug = String(process.env.ENABLE_PAYMENT_DEBUG || "false") === "true";
+const enablePaymentDebug =
+  String(process.env.ENABLE_PAYMENT_DEBUG || "false") === "true";
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 const downloadLinkTtlDays = Number(process.env.DOWNLOAD_LINK_TTL_DAYS || 7);
 const trustProxy = process.env.TRUST_PROXY;
@@ -77,7 +83,10 @@ const ADMIN_VIEW_AUDIT_DEDUP_TTL_MS = 2 * 60 * 1000;
 
 if (trustProxy) {
   const trustProxyValue = Number(trustProxy);
-  app.set("trust proxy", Number.isNaN(trustProxyValue) ? trustProxy : trustProxyValue);
+  app.set(
+    "trust proxy",
+    Number.isNaN(trustProxyValue) ? trustProxy : trustProxyValue,
+  );
 }
 
 app.disable("x-powered-by");
@@ -135,13 +144,30 @@ app.use((req, res, next) => {
   next();
 });
 
-const initializeRateLimit = createRateLimiter({ key: "payments-initialize", max: 12, windowMs: 15 * 60 * 1000 });
-const verifyRateLimit = createRateLimiter({ key: "payments-verify", max: 60, windowMs: 15 * 60 * 1000 });
-const webhookRateLimit = createRateLimiter({ key: "payments-webhook", max: 120, windowMs: 15 * 60 * 1000 });
-const downloadRateLimit = createRateLimiter({ key: "downloads", max: 120, windowMs: 15 * 60 * 1000 });
+const initializeRateLimit = createRateLimiter({
+  key: "payments-initialize",
+  max: 12,
+  windowMs: 15 * 60 * 1000,
+});
+const verifyRateLimit = createRateLimiter({
+  key: "payments-verify",
+  max: 60,
+  windowMs: 15 * 60 * 1000,
+});
+const webhookRateLimit = createRateLimiter({
+  key: "payments-webhook",
+  max: 120,
+  windowMs: 15 * 60 * 1000,
+});
+const downloadRateLimit = createRateLimiter({
+  key: "downloads",
+  max: 120,
+  windowMs: 15 * 60 * 1000,
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
+  logger.log("health-check", { ok: true });
 });
 
 app.get("/api/store/courses", async (_req, res) => {
@@ -243,7 +269,9 @@ app.put("/api/admin/courses/:slug", requireAdminAuth(), async (req, res) => {
 });
 
 app.post("/api/admin/courses/reorder", requireAdminAuth(), async (req, res) => {
-  const slugs = Array.isArray(req.body?.slugs) ? req.body.slugs.filter(Boolean) : [];
+  const slugs = Array.isArray(req.body?.slugs)
+    ? req.body.slugs.filter(Boolean)
+    : [];
 
   if (slugs.length === 0) {
     return res.status(400).json({ error: "Course order is required." });
@@ -276,127 +304,165 @@ app.delete("/api/admin/courses/:slug", requireAdminAuth(), async (req, res) => {
   res.status(204).end();
 });
 
-app.post("/api/admin/courses/:slug/asset", requireAdminAuth(), async (req, res) => {
-  const slug = req.params.slug;
-  const dataUri = typeof req.body?.dataUri === "string" ? req.body.dataUri : "";
-  const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
+app.post(
+  "/api/admin/courses/:slug/asset",
+  requireAdminAuth(),
+  async (req, res) => {
+    const slug = req.params.slug;
+    const dataUri =
+      typeof req.body?.dataUri === "string" ? req.body.dataUri : "";
+    const fileName =
+      typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
 
-  if (!dataUri || !fileName) {
-    return res.status(400).json({ error: "A valid file is required." });
-  }
+    if (!dataUri || !fileName) {
+      return res.status(400).json({ error: "A valid file is required." });
+    }
 
-  try {
-    const course = await replaceManagedCourseAsset(slug, {
-      actor: req.adminUser,
-      dataUri,
-      fileName: sanitizeAssetFileName(fileName),
-    });
+    try {
+      const course = await replaceManagedCourseAsset(slug, {
+        actor: req.adminUser,
+        dataUri,
+        fileName: sanitizeAssetFileName(fileName),
+      });
 
+      await recordAuditLogSafe({
+        actorEmail: req.adminUser.email,
+        actorRole: req.adminUser.role,
+        action: "course.asset.replaced",
+        entityType: "course",
+        entityId: slug,
+        metadata: { fileName },
+      });
+
+      res.json({ course });
+    } catch (error) {
+      logServerError("Course asset upload failed", error);
+      res
+        .status(500)
+        .json({ error: "Unable to upload course file right now." });
+    }
+  },
+);
+
+app.delete(
+  "/api/admin/courses/:slug/asset",
+  requireAdminAuth(),
+  async (req, res) => {
+    const slug = req.params.slug;
+
+    try {
+      const course = await clearManagedCourseAssets(slug, req.adminUser);
+      await recordAuditLogSafe({
+        actorEmail: req.adminUser.email,
+        actorRole: req.adminUser.role,
+        action: "course.asset.deleted",
+        entityType: "course",
+        entityId: slug,
+        metadata: {},
+      });
+      res.json({ course });
+    } catch (error) {
+      logServerError("Course asset delete failed", error);
+      res
+        .status(500)
+        .json({ error: "Unable to remove course file right now." });
+    }
+  },
+);
+
+app.get(
+  "/api/admin/transactions",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (req, res) => {
+    const range = parseDashboardRange(req.query.range);
+    const transactions = await listTransactions(range);
+    if (!shouldSkipAdminAuditLog(req)) {
+      await recordAuditLogSafe({
+        actorEmail: req.adminUser.email,
+        actorRole: req.adminUser.role,
+        action: "transactions.viewed",
+        entityType: "transaction",
+        entityId: "collection",
+        metadata: { range },
+      });
+    }
+    res.json({ transactions });
+  },
+);
+
+app.delete(
+  "/api/admin/transactions",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (req, res) => {
+    const references = Array.isArray(req.body?.references)
+      ? req.body.references.filter(Boolean)
+      : [];
+
+    if (references.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "At least one transaction reference is required." });
+    }
+
+    await deleteTransactionsByReference(references);
     await recordAuditLogSafe({
       actorEmail: req.adminUser.email,
       actorRole: req.adminUser.role,
-      action: "course.asset.replaced",
-      entityType: "course",
-      entityId: slug,
-      metadata: { fileName },
-    });
-
-    res.json({ course });
-  } catch (error) {
-    logServerError("Course asset upload failed", error);
-    res.status(500).json({ error: "Unable to upload course file right now." });
-  }
-});
-
-app.delete("/api/admin/courses/:slug/asset", requireAdminAuth(), async (req, res) => {
-  const slug = req.params.slug;
-
-  try {
-    const course = await clearManagedCourseAssets(slug, req.adminUser);
-    await recordAuditLogSafe({
-      actorEmail: req.adminUser.email,
-      actorRole: req.adminUser.role,
-      action: "course.asset.deleted",
-      entityType: "course",
-      entityId: slug,
-      metadata: {},
-    });
-    res.json({ course });
-  } catch (error) {
-    logServerError("Course asset delete failed", error);
-    res.status(500).json({ error: "Unable to remove course file right now." });
-  }
-});
-
-app.get("/api/admin/transactions", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  const range = parseDashboardRange(req.query.range);
-  const transactions = await listTransactions(range);
-  if (!shouldSkipAdminAuditLog(req)) {
-    await recordAuditLogSafe({
-      actorEmail: req.adminUser.email,
-      actorRole: req.adminUser.role,
-      action: "transactions.viewed",
+      action: "transactions.deleted",
       entityType: "transaction",
       entityId: "collection",
-      metadata: { range },
+      metadata: { references },
     });
-  }
-  res.json({ transactions });
-});
+    res.status(204).end();
+  },
+);
 
-app.delete("/api/admin/transactions", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  const references = Array.isArray(req.body?.references) ? req.body.references.filter(Boolean) : [];
+app.get(
+  "/api/admin/customers",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (req, res) => {
+    const range = parseDashboardRange(req.query.range);
+    const customers = await listCustomers(range);
+    if (!shouldSkipAdminAuditLog(req)) {
+      await recordAuditLogSafe({
+        actorEmail: req.adminUser.email,
+        actorRole: req.adminUser.role,
+        action: "customers.viewed",
+        entityType: "customer",
+        entityId: "collection",
+        metadata: { range },
+      });
+    }
+    res.json({ customers });
+  },
+);
 
-  if (references.length === 0) {
-    return res.status(400).json({ error: "At least one transaction reference is required." });
-  }
+app.delete(
+  "/api/admin/customers",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (req, res) => {
+    const emails = Array.isArray(req.body?.emails)
+      ? req.body.emails.filter(Boolean)
+      : [];
 
-  await deleteTransactionsByReference(references);
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "transactions.deleted",
-    entityType: "transaction",
-    entityId: "collection",
-    metadata: { references },
-  });
-  res.status(204).end();
-});
+    if (emails.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "At least one customer email is required." });
+    }
 
-app.get("/api/admin/customers", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  const range = parseDashboardRange(req.query.range);
-  const customers = await listCustomers(range);
-  if (!shouldSkipAdminAuditLog(req)) {
+    await deleteCustomersByEmail(emails);
     await recordAuditLogSafe({
       actorEmail: req.adminUser.email,
       actorRole: req.adminUser.role,
-      action: "customers.viewed",
+      action: "customers.deleted",
       entityType: "customer",
       entityId: "collection",
-      metadata: { range },
+      metadata: { emails },
     });
-  }
-  res.json({ customers });
-});
-
-app.delete("/api/admin/customers", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  const emails = Array.isArray(req.body?.emails) ? req.body.emails.filter(Boolean) : [];
-
-  if (emails.length === 0) {
-    return res.status(400).json({ error: "At least one customer email is required." });
-  }
-
-  await deleteCustomersByEmail(emails);
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "customers.deleted",
-    entityType: "customer",
-    entityId: "collection",
-    metadata: { emails },
-  });
-  res.status(204).end();
-});
+    res.status(204).end();
+  },
+);
 
 app.get("/api/admin/notifications", requireAdminAuth(), async (req, res) => {
   const payload = await listNotificationsSafe();
@@ -413,192 +479,258 @@ app.get("/api/admin/notifications", requireAdminAuth(), async (req, res) => {
   res.json(payload);
 });
 
-app.post("/api/admin/notifications/load", requireAdminAuth(), async (req, res) => {
-  const payload = await listNotificationsSafe();
-  req.requestLogger?.info("admin.notifications.loaded", {
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    unreadCount: payload.unreadCount,
-  });
-  res.json(payload);
-});
+app.post(
+  "/api/admin/notifications/load",
+  requireAdminAuth(),
+  async (req, res) => {
+    const payload = await listNotificationsSafe();
+    req.requestLogger?.info("admin.notifications.loaded", {
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      unreadCount: payload.unreadCount,
+    });
+    res.json(payload);
+  },
+);
 
-app.patch("/api/admin/notifications/:id", requireAdminAuth(), async (req, res) => {
-  const status = req.body?.status;
+app.patch(
+  "/api/admin/notifications/:id",
+  requireAdminAuth(),
+  async (req, res) => {
+    const status = req.body?.status;
 
-  if (status !== "read" && status !== "unread") {
-    return res.status(400).json({ error: "A valid notification status is required." });
-  }
+    if (status !== "read" && status !== "unread") {
+      return res
+        .status(400)
+        .json({ error: "A valid notification status is required." });
+    }
 
-  const notification = await updateNotificationStatus(req.params.id, status);
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: `notification.${status}`,
-    entityType: "notification",
-    entityId: req.params.id,
-    metadata: {},
-  });
-  res.json({ notification });
-});
-
-app.post("/api/admin/notifications/mark-all-read", requireAdminAuth(), async (req, res) => {
-  const updatedCount = await markAllNotificationsRead();
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "notifications.mark_all_read",
-    entityType: "notification",
-    entityId: "collection",
-    metadata: { updatedCount },
-  });
-  res.json({ updatedCount });
-});
-
-app.delete("/api/admin/notifications/:id", requireAdminAuth(), async (req, res) => {
-  await dismissNotification(req.params.id);
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "notification.dismissed",
-    entityType: "notification",
-    entityId: req.params.id,
-    metadata: {},
-  });
-  res.status(204).end();
-});
-
-app.get("/api/admin/audit-logs", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  const [auditLogs, loginLogs] = await Promise.all([listAuditLogsSafe(), listLoginLogsSafe()]);
-  if (!shouldSkipAdminAuditLog(req)) {
+    const notification = await updateNotificationStatus(req.params.id, status);
     await recordAuditLogSafe({
       actorEmail: req.adminUser.email,
       actorRole: req.adminUser.role,
-      action: "audit_logs.viewed",
-      entityType: "audit_log",
-      entityId: "collection",
+      action: `notification.${status}`,
+      entityType: "notification",
+      entityId: req.params.id,
       metadata: {},
     });
-  }
-  res.json({
-    auditLogs: mergeAuditLogsWithPending(auditLogs),
-    loginLogs,
-    pendingAuditLogCount: pendingAuditLogs.length,
-  });
-});
+    res.json({ notification });
+  },
+);
 
-app.post("/api/admin/audit-logs/sync", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  if (!isFirebaseAdminConfigured()) {
-    return res.json({ syncedCount: 0, pendingAuditLogCount: pendingAuditLogs.length });
-  }
-
-  if (pendingAuditLogs.length === 0) {
-    return res.json({ syncedCount: 0, pendingAuditLogCount: 0 });
-  }
-
-  const queueSnapshot = pendingAuditLogs.splice(0, pendingAuditLogs.length);
-
-  try {
-    const syncedCount = await recordAuditLogsBatch(queueSnapshot);
-    req.requestLogger?.info("admin.audit_logs.synced", {
+app.post(
+  "/api/admin/notifications/mark-all-read",
+  requireAdminAuth(),
+  async (req, res) => {
+    const updatedCount = await markAllNotificationsRead();
+    await recordAuditLogSafe({
       actorEmail: req.adminUser.email,
       actorRole: req.adminUser.role,
-      syncedCount,
+      action: "notifications.mark_all_read",
+      entityType: "notification",
+      entityId: "collection",
+      metadata: { updatedCount },
+    });
+    res.json({ updatedCount });
+  },
+);
+
+app.delete(
+  "/api/admin/notifications/:id",
+  requireAdminAuth(),
+  async (req, res) => {
+    await dismissNotification(req.params.id);
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "notification.dismissed",
+      entityType: "notification",
+      entityId: req.params.id,
+      metadata: {},
+    });
+    res.status(204).end();
+  },
+);
+
+app.get(
+  "/api/admin/audit-logs",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (req, res) => {
+    const [auditLogs, loginLogs] = await Promise.all([
+      listAuditLogsSafe(),
+      listLoginLogsSafe(),
+    ]);
+    if (!shouldSkipAdminAuditLog(req)) {
+      await recordAuditLogSafe({
+        actorEmail: req.adminUser.email,
+        actorRole: req.adminUser.role,
+        action: "audit_logs.viewed",
+        entityType: "audit_log",
+        entityId: "collection",
+        metadata: {},
+      });
+    }
+    res.json({
+      auditLogs: mergeAuditLogsWithPending(auditLogs),
+      loginLogs,
       pendingAuditLogCount: pendingAuditLogs.length,
     });
-    res.json({ syncedCount, pendingAuditLogCount: pendingAuditLogs.length });
-  } catch (error) {
-    pendingAuditLogs.unshift(...queueSnapshot);
-    logServerError("Audit log sync failed", error);
+  },
+);
 
-    if (isFirestoreQuotaError(error)) {
-      return res.status(503).json({
-        error: "Firestore usage is temporarily exhausted. Try syncing audit logs again later.",
+app.post(
+  "/api/admin/audit-logs/sync",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (req, res) => {
+    if (!isFirebaseAdminConfigured()) {
+      return res.json({
+        syncedCount: 0,
+        pendingAuditLogCount: pendingAuditLogs.length,
       });
     }
 
-    res.status(500).json({ error: "Unable to sync audit logs right now." });
-  }
-});
+    if (pendingAuditLogs.length === 0) {
+      return res.json({ syncedCount: 0, pendingAuditLogCount: 0 });
+    }
 
-app.get("/api/admin/users", requireAdminAuth({ superAdminOnly: true }), async (_req, res) => {
-  const users = await listAdminUsersSafe();
-  res.json({ users });
-});
+    const queueSnapshot = pendingAuditLogs.splice(0, pendingAuditLogs.length);
 
-app.put("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  const email = normalizeEmail(req.params.email);
-  const role = req.body?.role;
+    try {
+      const syncedCount = await recordAuditLogsBatch(queueSnapshot);
+      req.requestLogger?.info("admin.audit_logs.synced", {
+        actorEmail: req.adminUser.email,
+        actorRole: req.adminUser.role,
+        syncedCount,
+        pendingAuditLogCount: pendingAuditLogs.length,
+      });
+      res.json({ syncedCount, pendingAuditLogCount: pendingAuditLogs.length });
+    } catch (error) {
+      pendingAuditLogs.unshift(...queueSnapshot);
+      logServerError("Audit log sync failed", error);
 
-  if (role !== "admin" && role !== "super_admin") {
-    return res.status(400).json({ error: "A valid role is required." });
-  }
+      if (isFirestoreQuotaError(error)) {
+        return res.status(503).json({
+          error:
+            "Firestore usage is temporarily exhausted. Try syncing audit logs again later.",
+        });
+      }
 
-  if (!email) {
-    return res.status(400).json({ error: "A valid admin email is required." });
-  }
+      res.status(500).json({ error: "Unable to sync audit logs right now." });
+    }
+  },
+);
 
-  if (email === normalizeEmail(req.adminUser.email)) {
-    return res.status(400).json({ error: "You cannot change your own admin access from the console." });
-  }
+app.get(
+  "/api/admin/users",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (_req, res) => {
+    const users = await listAdminUsersSafe();
+    res.json({ users });
+  },
+);
 
-  if (isProtectedSuperAdminEmail(email)) {
-    return res.status(400).json({ error: "Primary super admin access is protected and cannot be changed here." });
-  }
+app.put(
+  "/api/admin/users/:email",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (req, res) => {
+    const email = normalizeEmail(req.params.email);
+    const role = req.body?.role;
 
-  const user = await upsertAdminUser({
-    email,
-    role,
-    invitedBy: req.adminUser.email,
-    active: req.body?.active !== false,
-  });
-  clearCachedAdminUser(email);
+    if (role !== "admin" && role !== "super_admin") {
+      return res.status(400).json({ error: "A valid role is required." });
+    }
 
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "admin.role.updated",
-    entityType: "admin_user",
-    entityId: normalizeEmail(email),
-    metadata: { role, active: req.body?.active !== false },
-  });
+    if (!email) {
+      return res
+        .status(400)
+        .json({ error: "A valid admin email is required." });
+    }
 
-  res.json({ user });
-});
+    if (email === normalizeEmail(req.adminUser.email)) {
+      return res
+        .status(400)
+        .json({
+          error: "You cannot change your own admin access from the console.",
+        });
+    }
 
-app.delete("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true }), async (req, res) => {
-  const email = normalizeEmail(req.params.email);
+    if (isProtectedSuperAdminEmail(email)) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Primary super admin access is protected and cannot be changed here.",
+        });
+    }
 
-  if (!email) {
-    return res.status(400).json({ error: "A valid admin email is required." });
-  }
+    const user = await upsertAdminUser({
+      email,
+      role,
+      invitedBy: req.adminUser.email,
+      active: req.body?.active !== false,
+    });
+    clearCachedAdminUser(email);
 
-  if (email === normalizeEmail(req.adminUser.email)) {
-    return res.status(400).json({ error: "You cannot delete your own admin access." });
-  }
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "admin.role.updated",
+      entityType: "admin_user",
+      entityId: normalizeEmail(email),
+      metadata: { role, active: req.body?.active !== false },
+    });
 
-  if (getSuperAdminEmails().includes(email)) {
-    return res.status(400).json({ error: "Primary super admin access cannot be deleted here." });
-  }
+    res.json({ user });
+  },
+);
 
-  await deleteAdminUserByEmail(email);
-  clearCachedAdminUser(email);
+app.delete(
+  "/api/admin/users/:email",
+  requireAdminAuth({ superAdminOnly: true }),
+  async (req, res) => {
+    const email = normalizeEmail(req.params.email);
 
-  await recordAuditLogSafe({
-    actorEmail: req.adminUser.email,
-    actorRole: req.adminUser.role,
-    action: "admin.deleted",
-    entityType: "admin_user",
-    entityId: email,
-    metadata: {},
-  });
+    if (!email) {
+      return res
+        .status(400)
+        .json({ error: "A valid admin email is required." });
+    }
 
-  res.status(204).end();
-});
+    if (email === normalizeEmail(req.adminUser.email)) {
+      return res
+        .status(400)
+        .json({ error: "You cannot delete your own admin access." });
+    }
+
+    if (getSuperAdminEmails().includes(email)) {
+      return res
+        .status(400)
+        .json({ error: "Primary super admin access cannot be deleted here." });
+    }
+
+    await deleteAdminUserByEmail(email);
+    clearCachedAdminUser(email);
+
+    await recordAuditLogSafe({
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      action: "admin.deleted",
+      entityType: "admin_user",
+      entityId: email,
+      metadata: {},
+    });
+
+    res.status(204).end();
+  },
+);
 
 app.post("/api/admin/client-events", requireAdminAuth(), async (req, res) => {
-  const event = typeof req.body?.event === "string" ? req.body.event.trim() : "";
-  const metadata = req.body?.metadata && typeof req.body.metadata === "object" ? req.body.metadata : {};
+  const event =
+    typeof req.body?.event === "string" ? req.body.event.trim() : "";
+  const metadata =
+    req.body?.metadata && typeof req.body.metadata === "object"
+      ? req.body.metadata
+      : {};
   const allowedEvents = new Set([
     "admin.console.loaded",
     "admin.console.refreshed",
@@ -621,15 +753,23 @@ app.post("/api/admin/client-events", requireAdminAuth(), async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/payments/debug/attempts", requirePaymentDebug, async (_req, res) => {
-  const attempts = await readJsonFile(attemptsFile);
-  res.json({ attempts });
-});
+app.get(
+  "/api/payments/debug/attempts",
+  requirePaymentDebug,
+  async (_req, res) => {
+    const attempts = await readJsonFile(attemptsFile);
+    res.json({ attempts });
+  },
+);
 
-app.get("/api/payments/debug/webhooks", requirePaymentDebug, async (_req, res) => {
-  const events = await readJsonFile(webhookEventsFile);
-  res.json({ events });
-});
+app.get(
+  "/api/payments/debug/webhooks",
+  requirePaymentDebug,
+  async (_req, res) => {
+    const events = await readJsonFile(webhookEventsFile);
+    res.json({ events });
+  },
+);
 
 app.post("/api/payments/initialize", initializeRateLimit, async (req, res) => {
   try {
@@ -638,45 +778,64 @@ app.post("/api/payments/initialize", initializeRateLimit, async (req, res) => {
     const { courseSlug, name, email, phone } = req.body ?? {};
     const course = await getCourseForCheckout(courseSlug);
     const publicAppBaseUrl = getPublicAppBaseUrl(req);
-    const checkoutPricing = course ? getCheckoutPricing(course.priceNaira) : null;
+    const checkoutPricing = course
+      ? getCheckoutPricing(course.priceNaira)
+      : null;
 
     if (!course || !name || !email) {
-      return res.status(400).json({ error: "Missing required payment details." });
+      return res
+        .status(400)
+        .json({ error: "Missing required payment details." });
     }
 
     const reference = `dwbb-${course.slug}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const amount = checkoutPricing.totalChargeKobo;
 
-    const response = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${paystackSecretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        amount,
-        currency: "NGN",
-        reference,
-        callback_url: `${publicAppBaseUrl}/payment/success`,
-        metadata: {
-          custom_fields: [
-            { display_name: "Course", variable_name: "course", value: course.title },
-            { display_name: "Customer Name", variable_name: "customer_name", value: name },
-            { display_name: "Phone", variable_name: "phone", value: phone || "" },
-          ],
-          appBaseUrl: publicAppBaseUrl,
-          publicApiBaseUrl: getPublicApiBaseUrl(req),
-          chargedAmountKobo: checkoutPricing.totalChargeKobo,
-          courseSlug: course.slug,
-          customerName: name,
-          customerPhone: phone || "",
-          processingFeeKobo: checkoutPricing.processingFeeKobo,
-          productType: "digital-course",
-          targetAmountKobo: checkoutPricing.baseAmountKobo,
+    const response = await fetch(
+      "https://api.paystack.co/transaction/initialize",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${paystackSecretKey}`,
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          email,
+          amount,
+          currency: "NGN",
+          reference,
+          callback_url: `${publicAppBaseUrl}/payment/success`,
+          metadata: {
+            custom_fields: [
+              {
+                display_name: "Course",
+                variable_name: "course",
+                value: course.title,
+              },
+              {
+                display_name: "Customer Name",
+                variable_name: "customer_name",
+                value: name,
+              },
+              {
+                display_name: "Phone",
+                variable_name: "phone",
+                value: phone || "",
+              },
+            ],
+            appBaseUrl: publicAppBaseUrl,
+            publicApiBaseUrl: getPublicApiBaseUrl(req),
+            chargedAmountKobo: checkoutPricing.totalChargeKobo,
+            courseSlug: course.slug,
+            customerName: name,
+            customerPhone: phone || "",
+            processingFeeKobo: checkoutPricing.processingFeeKobo,
+            productType: "digital-course",
+            targetAmountKobo: checkoutPricing.baseAmountKobo,
+          },
+        }),
+      },
+    );
 
     const payload = await response.json();
 
@@ -738,7 +897,10 @@ app.post("/api/payments/webhook", webhookRateLimit, async (req, res) => {
   try {
     ensurePaystackConfigured();
     const signature = req.headers["x-paystack-signature"];
-    const hash = crypto.createHmac("sha512", paystackSecretKey).update(req.rawBody || "").digest("hex");
+    const hash = crypto
+      .createHmac("sha512", paystackSecretKey)
+      .update(req.rawBody || "")
+      .digest("hex");
 
     if (!signature || signature !== hash) {
       return res.status(401).json({ error: "Invalid webhook signature." });
@@ -768,11 +930,17 @@ app.get("/api/download/:token", downloadRateLimit, async (req, res) => {
   const purchase = await findPurchaseByDownloadToken(req.params.token);
 
   if (!purchase) {
-    return res.status(404).json({ error: "Download link is invalid or has expired." });
+    return res
+      .status(404)
+      .json({ error: "Download link is invalid or has expired." });
   }
 
   const expiresAt = getPurchaseExpiry(purchase);
-  if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+  if (
+    !expiresAt ||
+    Number.isNaN(expiresAt.getTime()) ||
+    expiresAt.getTime() <= Date.now()
+  ) {
     return res.status(410).json({ error: "This download link has expired." });
   }
 
@@ -780,8 +948,11 @@ app.get("/api/download/:token", downloadRateLimit, async (req, res) => {
   const fallbackCourse = findDigitalCourse(purchase.courseSlug);
   const deliveryAsset =
     purchase.deliveryAsset ||
-    (Array.isArray(course?.assets) ? course.assets.find((asset) => asset?.url) : null);
-  const filePath = purchase.filePath || course?.filePath || fallbackCourse?.filePath;
+    (Array.isArray(course?.assets)
+      ? course.assets.find((asset) => asset?.url)
+      : null);
+  const filePath =
+    purchase.filePath || course?.filePath || fallbackCourse?.filePath;
   const fileName = resolveDownloadFileName({
     asset: deliveryAsset,
     fallbackFileName:
@@ -796,27 +967,44 @@ app.get("/api/download/:token", downloadRateLimit, async (req, res) => {
       const assetResponse = await fetch(deliveryAsset.url);
 
       if (!assetResponse.ok) {
-        return res.status(502).json({ error: "Course materials are temporarily unavailable." });
+        return res
+          .status(502)
+          .json({ error: "Course materials are temporarily unavailable." });
       }
 
       const fileBuffer = Buffer.from(await assetResponse.arrayBuffer());
-      const contentType = getDownloadMimeType(fileName) || assetResponse.headers.get("content-type") || "application/octet-stream";
-      const encodedFileName = encodeURIComponent(fileName).replace(/['()]/g, escape).replace(/\*/g, "%2A");
+      const contentType =
+        getDownloadMimeType(fileName) ||
+        assetResponse.headers.get("content-type") ||
+        "application/octet-stream";
+      const encodedFileName = encodeURIComponent(fileName)
+        .replace(/['()]/g, escape)
+        .replace(/\*/g, "%2A");
       res.setHeader("Content-Type", contentType);
-      res.setHeader("Content-Disposition", `attachment; filename="${fileName.replace(/"/g, "")}"; filename*=UTF-8''${encodedFileName}`);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${fileName.replace(/"/g, "")}"; filename*=UTF-8''${encodedFileName}`,
+      );
       res.setHeader("Content-Length", String(fileBuffer.byteLength));
       res.setHeader("Cache-Control", "private, no-store, max-age=0");
       res.setHeader("X-Download-Options", "noopen");
       res.end(fileBuffer);
       return;
     } catch (error) {
-      logServerError(`Cloudinary download failed for ${purchase.reference}`, error);
-      return res.status(502).json({ error: "Course materials are temporarily unavailable." });
+      logServerError(
+        `Cloudinary download failed for ${purchase.reference}`,
+        error,
+      );
+      return res
+        .status(502)
+        .json({ error: "Course materials are temporarily unavailable." });
     }
   }
 
   if (!filePath || !fileName) {
-    return res.status(404).json({ error: "Course materials are no longer available." });
+    return res
+      .status(404)
+      .json({ error: "Course materials are no longer available." });
   }
 
   res.download(filePath, fileName);
@@ -827,11 +1015,14 @@ app.listen(port, () => {
 });
 
 async function verifyAndFulfill(reference, options = {}) {
-  const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-    headers: {
-      Authorization: `Bearer ${paystackSecretKey}`,
+  const response = await fetch(
+    `https://api.paystack.co/transaction/verify/${reference}`,
+    {
+      headers: {
+        Authorization: `Bearer ${paystackSecretKey}`,
+      },
     },
-  });
+  );
   const payload = await response.json();
 
   if (!response.ok || !payload.status) {
@@ -840,10 +1031,20 @@ async function verifyAndFulfill(reference, options = {}) {
 
   const transaction = payload.data;
   const courseSlug = transaction.metadata?.courseSlug;
-  const customerName = transaction.metadata?.customerName || transaction.customer?.first_name || "Customer";
+  const customerName =
+    transaction.metadata?.customerName ||
+    transaction.customer?.first_name ||
+    "Customer";
   const customerPhone = transaction.metadata?.customerPhone || "";
-  const publicAppBaseUrl = normalizeAppBaseUrl(transaction.metadata?.appBaseUrl || appBaseUrl);
-  const publicDownloadBaseUrl = normalizeApiBaseUrl(options.publicApiBaseUrl || transaction.metadata?.publicApiBaseUrl || publicApiBaseUrl || publicAppBaseUrl);
+  const publicAppBaseUrl = normalizeAppBaseUrl(
+    transaction.metadata?.appBaseUrl || appBaseUrl,
+  );
+  const publicDownloadBaseUrl = normalizeApiBaseUrl(
+    options.publicApiBaseUrl ||
+      transaction.metadata?.publicApiBaseUrl ||
+      publicApiBaseUrl ||
+      publicAppBaseUrl,
+  );
   const course = await getCourseForCheckout(courseSlug);
 
   if (!course) {
@@ -856,21 +1057,43 @@ async function verifyAndFulfill(reference, options = {}) {
 
   const amountPaidKobo = Number(transaction.amount || 0);
   const paystackFeeKobo = Number(transaction.fees || 0);
-  const metadataChargedAmountKobo = parseOptionalAmount(transaction.metadata?.chargedAmountKobo);
-  const metadataTargetAmountKobo = parseOptionalAmount(transaction.metadata?.targetAmountKobo);
-  const metadataProcessingFeeKobo = parseOptionalAmount(transaction.metadata?.processingFeeKobo);
+  const metadataChargedAmountKobo = parseOptionalAmount(
+    transaction.metadata?.chargedAmountKobo,
+  );
+  const metadataTargetAmountKobo = parseOptionalAmount(
+    transaction.metadata?.targetAmountKobo,
+  );
+  const metadataProcessingFeeKobo = parseOptionalAmount(
+    transaction.metadata?.processingFeeKobo,
+  );
   const currentCheckoutPricing = getCheckoutPricing(course.priceNaira);
-  const currentAmountCandidates = new Set([currentCheckoutPricing.totalChargeKobo, course.priceNaira * 100]);
+  const currentAmountCandidates = new Set([
+    currentCheckoutPricing.totalChargeKobo,
+    course.priceNaira * 100,
+  ]);
   const recordedAttempt = await findPaymentAttempt(reference);
-  const recordedAttemptAmountKobo = parseOptionalAmount(recordedAttempt?.amount);
-  const recordedAttemptTargetAmountKobo = parseOptionalAmount(recordedAttempt?.targetAmountKobo);
-  const recordedAttemptProcessingFeeKobo = parseOptionalAmount(recordedAttempt?.processingFeeKobo);
+  const recordedAttemptAmountKobo = parseOptionalAmount(
+    recordedAttempt?.amount,
+  );
+  const recordedAttemptTargetAmountKobo = parseOptionalAmount(
+    recordedAttempt?.targetAmountKobo,
+  );
+  const recordedAttemptProcessingFeeKobo = parseOptionalAmount(
+    recordedAttempt?.processingFeeKobo,
+  );
 
-  if (metadataChargedAmountKobo !== null && amountPaidKobo !== metadataChargedAmountKobo) {
+  if (
+    metadataChargedAmountKobo !== null &&
+    amountPaidKobo !== metadataChargedAmountKobo
+  ) {
     throw new Error("Payment amount mismatch detected.");
   }
 
-  if (metadataChargedAmountKobo === null && recordedAttemptAmountKobo !== null && amountPaidKobo !== recordedAttemptAmountKobo) {
+  if (
+    metadataChargedAmountKobo === null &&
+    recordedAttemptAmountKobo !== null &&
+    amountPaidKobo !== recordedAttemptAmountKobo
+  ) {
     throw new Error("Payment amount mismatch detected.");
   }
 
@@ -884,9 +1107,17 @@ async function verifyAndFulfill(reference, options = {}) {
   }
 
   const inferredNetAmountKobo = Math.max(amountPaidKobo - paystackFeeKobo, 0);
-  const targetAmountKobo = metadataTargetAmountKobo ?? recordedAttemptTargetAmountKobo ?? inferredNetAmountKobo;
-  const processingFeeKobo = metadataProcessingFeeKobo ?? recordedAttemptProcessingFeeKobo ?? paystackFeeKobo;
-  const deliveryAsset = Array.isArray(course.assets) ? course.assets.find((asset) => asset?.url) || null : null;
+  const targetAmountKobo =
+    metadataTargetAmountKobo ??
+    recordedAttemptTargetAmountKobo ??
+    inferredNetAmountKobo;
+  const processingFeeKobo =
+    metadataProcessingFeeKobo ??
+    recordedAttemptProcessingFeeKobo ??
+    paystackFeeKobo;
+  const deliveryAsset = Array.isArray(course.assets)
+    ? course.assets.find((asset) => asset?.url) || null
+    : null;
 
   const existing = await findPurchaseByReference(reference);
 
@@ -974,7 +1205,10 @@ function securityHeadersMiddleware(_req, res, next) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   next();
 }
@@ -993,7 +1227,9 @@ function requireAdminAuth(options = {}) {
       const auth = getFirebaseAdminAuth();
       if (!auth) {
         req.requestLogger?.error("auth.admin.firebase_not_configured");
-        return res.status(503).json({ error: "Admin authentication is not configured." });
+        return res
+          .status(503)
+          .json({ error: "Admin authentication is not configured." });
       }
 
       const decodedToken = await auth.verifyIdToken(token, true);
@@ -1012,7 +1248,9 @@ function requireAdminAuth(options = {}) {
           email,
           uid: decodedToken.uid,
         });
-        return res.status(403).json({ error: "You do not have access to this console." });
+        return res
+          .status(403)
+          .json({ error: "You do not have access to this console." });
       }
 
       if (options.superAdminOnly && adminUser.role !== "super_admin") {
@@ -1021,7 +1259,9 @@ function requireAdminAuth(options = {}) {
           uid: decodedToken.uid,
           role: adminUser.role,
         });
-        return res.status(403).json({ error: "Super admin access is required." });
+        return res
+          .status(403)
+          .json({ error: "Super admin access is required." });
       }
 
       req.adminUser = {
@@ -1045,10 +1285,13 @@ function requireAdminAuth(options = {}) {
       logServerError("Admin authentication failed", error);
       if (isFirestoreQuotaError(error)) {
         return res.status(503).json({
-          error: "Firestore usage is temporarily exhausted. The admin console will be available again once quota resets or billing is increased.",
+          error:
+            "Firestore usage is temporarily exhausted. The admin console will be available again once quota resets or billing is increased.",
         });
       }
-      res.status(401).json({ error: "Unable to authenticate this admin session." });
+      res
+        .status(401)
+        .json({ error: "Unable to authenticate this admin session." });
     }
   };
 }
@@ -1075,7 +1318,9 @@ function createRateLimiter({ key, max, windowMs }) {
 
     if (entry.count >= max) {
       res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000));
-      res.status(429).json({ error: "Too many requests. Please try again shortly." });
+      res
+        .status(429)
+        .json({ error: "Too many requests. Please try again shortly." });
       return;
     }
 
@@ -1086,7 +1331,12 @@ function createRateLimiter({ key, max, windowMs }) {
 }
 
 function getClientIdentifier(req) {
-  return req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown";
+  return (
+    req.ip ||
+    req.headers["x-forwarded-for"] ||
+    req.socket?.remoteAddress ||
+    "unknown"
+  );
 }
 
 function parseAllowedOrigins(value) {
@@ -1105,7 +1355,12 @@ function parseOriginValue(origin) {
 }
 
 function isLoopbackHostname(hostname) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
 }
 
 function originsMatch(candidate, trusted) {
@@ -1132,11 +1387,19 @@ function originsMatch(candidate, trusted) {
     return true;
   }
 
-  return isLoopbackHostname(candidateUrl.hostname) && isLoopbackHostname(trustedUrl.hostname);
+  return (
+    isLoopbackHostname(candidateUrl.hostname) &&
+    isLoopbackHostname(trustedUrl.hostname)
+  );
 }
 
 function parseDashboardRange(value) {
-  if (value === "today" || value === "7d" || value === "30d" || value === "all") {
+  if (
+    value === "today" ||
+    value === "7d" ||
+    value === "30d" ||
+    value === "all"
+  ) {
     return value;
   }
 
@@ -1145,7 +1408,9 @@ function parseDashboardRange(value) {
 
 function isAllowedOrigin(origin) {
   if (allowedOrigins.length > 0) {
-    return allowedOrigins.some((allowedOrigin) => originsMatch(origin, allowedOrigin));
+    return allowedOrigins.some((allowedOrigin) =>
+      originsMatch(origin, allowedOrigin),
+    );
   }
 
   if (!isProduction) {
@@ -1166,8 +1431,12 @@ function getPublicAppBaseUrl(req) {
   const forwardedHostHeader = req.headers["x-forwarded-host"];
   const hostHeader = req.headers.host;
   const originHeader = req.headers.origin;
-  const forwardedProto = Array.isArray(forwardedProtoHeader) ? forwardedProtoHeader[0] : forwardedProtoHeader;
-  const forwardedHost = Array.isArray(forwardedHostHeader) ? forwardedHostHeader[0] : forwardedHostHeader;
+  const forwardedProto = Array.isArray(forwardedProtoHeader)
+    ? forwardedProtoHeader[0]
+    : forwardedProtoHeader;
+  const forwardedHost = Array.isArray(forwardedHostHeader)
+    ? forwardedHostHeader[0]
+    : forwardedHostHeader;
   const origin = Array.isArray(originHeader) ? originHeader[0] : originHeader;
 
   if (origin && (isAllowedOrigin(origin) || !isProduction)) {
@@ -1175,7 +1444,9 @@ function getPublicAppBaseUrl(req) {
   }
 
   if (trustProxy && (forwardedHost || hostHeader)) {
-    return normalizeAppBaseUrl(`${forwardedProto || "http"}://${forwardedHost || hostHeader}`);
+    return normalizeAppBaseUrl(
+      `${forwardedProto || "http"}://${forwardedHost || hostHeader}`,
+    );
   }
 
   if (!isProduction && hostHeader) {
@@ -1193,19 +1464,27 @@ function getPublicApiBaseUrl(req) {
   const forwardedProtoHeader = req.headers["x-forwarded-proto"];
   const forwardedHostHeader = req.headers["x-forwarded-host"];
   const hostHeader = req.headers.host;
-  const forwardedProto = Array.isArray(forwardedProtoHeader) ? forwardedProtoHeader[0] : forwardedProtoHeader;
-  const forwardedHost = Array.isArray(forwardedHostHeader) ? forwardedHostHeader[0] : forwardedHostHeader;
+  const forwardedProto = Array.isArray(forwardedProtoHeader)
+    ? forwardedProtoHeader[0]
+    : forwardedProtoHeader;
+  const forwardedHost = Array.isArray(forwardedHostHeader)
+    ? forwardedHostHeader[0]
+    : forwardedHostHeader;
 
   if (publicApiBaseUrl) {
     return normalizeApiBaseUrl(publicApiBaseUrl);
   }
 
   if (trustProxy && (forwardedHost || forwardedProto)) {
-    return normalizeApiBaseUrl(`${forwardedProto || "https"}://${forwardedHost || hostHeader}`);
+    return normalizeApiBaseUrl(
+      `${forwardedProto || "https"}://${forwardedHost || hostHeader}`,
+    );
   }
 
   if (hostHeader) {
-    return normalizeApiBaseUrl(`${isProduction ? "https" : "http"}://${hostHeader}`);
+    return normalizeApiBaseUrl(
+      `${isProduction ? "https" : "http"}://${hostHeader}`,
+    );
   }
 
   return normalizeApiBaseUrl(appBaseUrl);
@@ -1344,7 +1623,9 @@ function sanitizeCourseUpdates(payload) {
     updates.priceNaira = Math.max(Math.round(payload.priceNaira), 0);
   }
   if (Array.isArray(payload.deliverables)) {
-    updates.deliverables = payload.deliverables.map((item) => String(item)).filter(Boolean);
+    updates.deliverables = payload.deliverables
+      .map((item) => String(item))
+      .filter(Boolean);
   }
   if (typeof payload.published === "boolean") {
     updates.published = payload.published;
@@ -1370,10 +1651,14 @@ function sanitizeAssetFileName(fileName) {
 
 function ensureFileNameExtension(fileName, format) {
   const normalizedFileName = String(fileName || "").trim();
-  const normalizedFormat = String(format || "").trim().replace(/^\./, "");
+  const normalizedFormat = String(format || "")
+    .trim()
+    .replace(/^\./, "");
 
   if (!normalizedFileName) {
-    return normalizedFormat ? `dwbb-course-materials.${normalizedFormat}` : "dwbb-course-materials";
+    return normalizedFormat
+      ? `dwbb-course-materials.${normalizedFormat}`
+      : "dwbb-course-materials";
   }
 
   if (!normalizedFormat || path.extname(normalizedFileName)) {
@@ -1404,21 +1689,26 @@ function getDownloadMimeType(fileName) {
     {
       ".csv": "text/csv; charset=utf-8",
       ".doc": "application/msword",
-      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".docx":
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ".json": "application/json; charset=utf-8",
       ".pdf": "application/pdf",
       ".ppt": "application/vnd.ms-powerpoint",
-      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ".pptx":
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       ".txt": "text/plain; charset=utf-8",
       ".xls": "application/vnd.ms-excel",
-      ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".xlsx":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       ".zip": "application/zip",
     }[extension] || null
   );
 }
 
 function getPaystackMode() {
-  return String(paystackPublicKey || "").startsWith("pk_live_") ? "live" : "test";
+  return String(paystackPublicKey || "").startsWith("pk_live_")
+    ? "live"
+    : "test";
 }
 
 async function listManagedCoursesSafe() {
@@ -1441,7 +1731,12 @@ async function recordAdminLoginSafe(adminUser) {
     return;
   }
 
-  if (shouldSkipAdminActivity(`login:${adminUser.uid || adminUser.email}`, ADMIN_LOGIN_DEDUP_TTL_MS)) {
+  if (
+    shouldSkipAdminActivity(
+      `login:${adminUser.uid || adminUser.email}`,
+      ADMIN_LOGIN_DEDUP_TTL_MS,
+    )
+  ) {
     return;
   }
 
@@ -1493,7 +1788,9 @@ async function listAdminUsersSafe() {
   }
 
   const users = await listAdminUsers();
-  const userMap = new Map(users.map((user) => [normalizeEmail(user.email), user]));
+  const userMap = new Map(
+    users.map((user) => [normalizeEmail(user.email), user]),
+  );
 
   for (const email of getSuperAdminEmails()) {
     userMap.set(email, {
@@ -1505,7 +1802,9 @@ async function listAdminUsersSafe() {
     });
   }
 
-  return Array.from(userMap.values()).sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
+  return Array.from(userMap.values()).sort((a, b) =>
+    String(a.email || "").localeCompare(String(b.email || "")),
+  );
 }
 
 async function listNotificationsSafe() {
@@ -1518,7 +1817,9 @@ async function listNotificationsSafe() {
 
 function mergeAuditLogsWithPending(persistedLogs = []) {
   return [...pendingAuditLogs, ...persistedLogs]
-    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .sort((a, b) =>
+      String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+    )
     .slice(0, 100);
 }
 
@@ -1549,10 +1850,18 @@ function getPurchaseExpiry(purchase) {
   }
 
   const paidAt = new Date(purchase.paidAt);
-  return new Date(paidAt.getTime() + Math.max(downloadLinkTtlDays, 1) * 24 * 60 * 60 * 1000);
+  return new Date(
+    paidAt.getTime() + Math.max(downloadLinkTtlDays, 1) * 24 * 60 * 60 * 1000,
+  );
 }
 
-async function sendConfirmationEmail({ appBaseUrl, courseTitle, customerName, email, downloadUrl }) {
+async function sendConfirmationEmail({
+  appBaseUrl,
+  courseTitle,
+  customerName,
+  email,
+  downloadUrl,
+}) {
   if (!email) {
     return { previewUrl: null };
   }
@@ -1560,9 +1869,13 @@ async function sendConfirmationEmail({ appBaseUrl, courseTitle, customerName, em
   const safeCustomerName = escapeHtml(customerName || "Customer");
   const safeCourseTitle = escapeHtml(courseTitle || "Your course");
   const safeDownloadUrl = escapeHtml(downloadUrl);
-  const safeAppBaseUrl = String(appBaseUrl || "http://localhost:5173").replace(/\/+$/, "");
+  const safeAppBaseUrl = String(appBaseUrl || "http://localhost:5173").replace(
+    /\/+$/,
+    "",
+  );
   const logoUrl = `${safeAppBaseUrl}/dwbb-logo.png`;
-  const supportUrl = "https://wa.me/2348106258080?text=Hello%20DWBB%20Academy!%20I%20need%20help%20with%20my%20course%20download.";
+  const supportUrl =
+    "https://wa.me/2348106258080?text=Hello%20DWBB%20Academy!%20I%20need%20help%20with%20my%20course%20download.";
 
   const html = `
     <div style="margin:0;padding:32px 16px;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b;">
@@ -1641,7 +1954,11 @@ let cachedTransportPromise;
 async function createMailTransport() {
   if (!cachedTransportPromise) {
     cachedTransportPromise = (async () => {
-      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      if (
+        process.env.SMTP_HOST &&
+        process.env.SMTP_USER &&
+        process.env.SMTP_PASS
+      ) {
         return nodemailer.createTransport({
           host: process.env.SMTP_HOST,
           port: Number(process.env.SMTP_PORT || 587),
@@ -1775,7 +2092,10 @@ async function findPurchaseByDownloadToken(downloadToken) {
   const purchaseCollection = getPurchaseCollection();
 
   if (purchaseCollection) {
-    const snapshot = await purchaseCollection.where("downloadToken", "==", downloadToken).limit(1).get();
+    const snapshot = await purchaseCollection
+      .where("downloadToken", "==", downloadToken)
+      .limit(1)
+      .get();
     if (!snapshot.empty) {
       const doc = snapshot.docs[0];
       return { id: doc.id, ...doc.data() };
@@ -1785,14 +2105,18 @@ async function findPurchaseByDownloadToken(downloadToken) {
   }
 
   const purchases = await readJsonFile(purchasesFile);
-  return purchases.find((entry) => entry.downloadToken === downloadToken) || null;
+  return (
+    purchases.find((entry) => entry.downloadToken === downloadToken) || null
+  );
 }
 
 async function createPurchaseRecord(purchase) {
   const purchaseCollection = getPurchaseCollection();
 
   if (purchaseCollection) {
-    await purchaseCollection.doc(purchase.reference).set(purchase, { merge: false });
+    await purchaseCollection
+      .doc(purchase.reference)
+      .set(purchase, { merge: false });
     return;
   }
 
@@ -1816,7 +2140,9 @@ async function updatePurchaseRecord(reference, updates) {
   }
 
   const purchases = await readJsonFile(purchasesFile);
-  const purchaseIndex = purchases.findIndex((entry) => entry.reference === reference);
+  const purchaseIndex = purchases.findIndex(
+    (entry) => entry.reference === reference,
+  );
 
   if (purchaseIndex < 0) {
     return;
