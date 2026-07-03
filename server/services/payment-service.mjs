@@ -4,11 +4,12 @@ import path from "node:path";
 import { getCheckoutPricing } from "../../src/lib/paystackPricing.js";
 
 export function createPaymentService({
+  adminRealtime,
   appBaseUrl,
   downloadLinkTtlDays,
-  downloadStore,
   findPurchaseByReference,
   findPaymentAttempt,
+  formatNaira,
   getCourseForCheckout,
   mailer,
   mirrorPurchaseSafe,
@@ -181,7 +182,26 @@ export function createPaymentService({
     };
 
     await createPurchaseRecord(purchase);
-    await mirrorPurchaseSafe({ purchase, transaction, course });
+    const mirrorResult = await mirrorPurchaseSafe({ purchase, transaction, course });
+
+    if (mirrorResult?.notification) {
+      await adminRealtime?.broadcastNotificationCreated(mirrorResult.notification);
+    }
+
+    try {
+      await mailer.sendPurchaseAlertEmail({
+        chargedAmount: formatNaira(Math.round(amountPaidKobo / 100)),
+        courseTitle: course.title,
+        customerEmail: transaction.customer?.email || "",
+        customerName,
+        netAmount: formatNaira(Math.round(targetAmountKobo / 100)),
+        paidAt: purchase.paidAt,
+        phone: customerPhone,
+        reference,
+      });
+    } catch (error) {
+      logServerError(`Purchase alert email failed for ${reference}`, error);
+    }
 
     let emailMessage = `Payment verified. Download access is ready for ${downloadLinkTtlDays} days.`;
 

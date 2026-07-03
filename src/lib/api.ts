@@ -9,3 +9,18 @@ export function apiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${normalizedBaseUrl}${normalizedPath}`;
 }
+
+export function apiWebSocketUrl(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  if (rawApiBaseUrl) {
+    const baseUrl = new URL(rawApiBaseUrl);
+    baseUrl.protocol = baseUrl.protocol === "https:" ? "wss:" : "ws:";
+    baseUrl.pathname = normalizedPath;
+    baseUrl.search = "";
+    return baseUrl.toString();
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${normalizedPath}`;
+}

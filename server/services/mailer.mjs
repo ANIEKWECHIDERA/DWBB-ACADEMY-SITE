@@ -87,6 +87,80 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
     };
   }
 
+  async function sendPurchaseAlertEmail({
+    chargedAmount,
+    courseTitle,
+    customerEmail,
+    customerName,
+    netAmount,
+    paidAt,
+    phone,
+    reference,
+  }) {
+    const transporter = await createMailTransport();
+    const safeAppBaseUrl = String(appBaseUrl || "http://localhost:5173").replace(
+      /\/+$/,
+      "",
+    );
+    const logoUrl = `${safeAppBaseUrl}/dwbb-logo.png`;
+    const safeCourseTitle = escapeHtml(courseTitle || "Course purchase");
+    const safeCustomerName = escapeHtml(customerName || "Customer");
+    const safeCustomerEmail = escapeHtml(customerEmail || "-");
+    const safePhone = escapeHtml(phone || "-");
+    const safeReference = escapeHtml(reference || "-");
+    const safeChargedAmount = escapeHtml(chargedAmount || "-");
+    const safeNetAmount = escapeHtml(netAmount || "-");
+    const safePaidAt = escapeHtml(paidAt || "-");
+
+    const html = `
+      <div style="margin:0;padding:32px 16px;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b;">
+        <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;overflow:hidden;">
+          <div style="background:linear-gradient(135deg,#0a1e4a 0%,#1a3a7a 100%);padding:28px 32px;text-align:center;">
+            <img src="${logoUrl}" alt="DWBB Academy logo" style="height:72px;width:auto;display:block;margin:0 auto 16px;" />
+            <div style="font-size:12px;letter-spacing:0.24em;text-transform:uppercase;color:#f5c842;font-weight:700;">New Purchase Alert</div>
+            <h1 style="margin:14px 0 0;font-size:28px;line-height:1.2;color:#ffffff;">A course purchase was confirmed</h1>
+          </div>
+          <div style="padding:32px;">
+            <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#475569;">
+              A verified Paystack payment has been fulfilled successfully.
+            </p>
+            <table style="width:100%;border-collapse:collapse;">
+              <tbody>
+                ${renderRow("Course", safeCourseTitle)}
+                ${renderRow("Customer", safeCustomerName)}
+                ${renderRow("Email", safeCustomerEmail)}
+                ${renderRow("Phone", safePhone)}
+                ${renderRow("Gross Charged", safeChargedAmount)}
+                ${renderRow("Net Target", safeNetAmount)}
+                ${renderRow("Reference", safeReference)}
+                ${renderRow("Paid At", safePaidAt)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `.trim();
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || "DWBB Academy <no-reply@dwbbacademy.com>",
+      to: "dwbbacademy@gmail.com",
+      subject: `New purchase: ${courseTitle}`,
+      html,
+      text: [
+        "A verified course purchase was completed.",
+        "",
+        `Course: ${courseTitle}`,
+        `Customer: ${customerName}`,
+        `Email: ${customerEmail || "-"}`,
+        `Phone: ${phone || "-"}`,
+        `Gross Charged: ${chargedAmount || "-"}`,
+        `Net Target: ${netAmount || "-"}`,
+        `Reference: ${reference || "-"}`,
+        `Paid At: ${paidAt || "-"}`,
+      ].join("\n"),
+    });
+  }
+
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -133,5 +207,15 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
 
   return {
     sendConfirmationEmail,
+    sendPurchaseAlertEmail,
   };
+}
+
+function renderRow(label, value) {
+  return `
+    <tr>
+      <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:14px;font-weight:700;color:#0f172a;width:180px;vertical-align:top;">${label}</td>
+      <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:14px;color:#475569;">${value}</td>
+    </tr>
+  `.trim();
 }

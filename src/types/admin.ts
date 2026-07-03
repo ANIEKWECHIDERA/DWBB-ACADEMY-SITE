@@ -146,3 +146,49 @@ export interface AdminNotification {
   createdAt: string;
   readAt?: string | null;
 }
+
+export type AdminRealtimeEvent =
+  | {
+      type: "notifications.snapshot_required";
+      timestamp: string;
+      eventId: string;
+      payload: {
+        reason: "connected";
+        unreadCount: number | null;
+      };
+    }
+  | {
+      type: "notifications.created" | "notifications.updated";
+      timestamp: string;
+      eventId: string;
+      payload: {
+        notification: AdminNotification;
+        unreadCount: number | null;
+      };
+    }
+  | {
+      type: "notifications.dismissed";
+      timestamp: string;
+      eventId: string;
+      payload: {
+        notificationId: string;
+        unreadCount: number | null;
+      };
+    }
+  | {
+      type: "notifications.read_all";
+      timestamp: string;
+      eventId: string;
+      payload: {
+        unreadCount: number | null;
+        updatedAt: string;
+      };
+    }
+  | {
+      type: "session.revoked";
+      timestamp: string;
+      eventId: string;
+      payload: {
+        reason?: string;
+      };
+    };

@@ -2,7 +2,7 @@ import type { DragEndEvent } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { BookCopy, ClipboardList, CreditCard, LayoutGrid, ShieldCheck, Users } from "lucide-react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { useToast } from "@/components/ui/toast";
 import { adminEmailPattern } from "@/features/admin/constants";
@@ -33,6 +33,7 @@ import {
   updateAdminUser,
   type AdminRange,
 } from "@/lib/admin-api";
+import { connectAdminRealtime } from "@/lib/admin-realtime";
 import { firebaseAuth, firebaseEnabled, firebaseInitError, googleProvider } from "@/lib/firebase";
 import { getCheckoutPricing } from "@/lib/paystackPricing";
 import type {
@@ -43,6 +44,7 @@ import type {
   AdminRole,
   AdminSession,
   AdminTransaction,
+  AdminRealtimeEvent,
   AuditLogItem,
   LoginLogItem,
   ManagedCourse,
@@ -115,6 +117,7 @@ export function useAdminConsole() {
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loginLogs, setLoginLogs] = useState<LoginLogItem[]>([]);
@@ -146,6 +149,7 @@ export function useAdminConsole() {
 
       if (!user) {
         setSession(null);
+        setNotificationUnreadCount(0);
         setLoadingSession(false);
         return;
       }
@@ -254,6 +258,7 @@ export function useAdminConsole() {
       }).catch(() => {});
       const payload = await loadAdminNotifications(firebaseUser);
       setNotifications(payload.notifications);
+      setNotificationUnreadCount(payload.unreadCount);
       setNotificationsLoaded(true);
     } catch (error) {
       pushToast({
@@ -340,7 +345,7 @@ export function useAdminConsole() {
   const mainSections = visibleSections.filter((section) => section.id === "overview" || section.id === "courses");
   const commerceSections = visibleSections.filter((section) => section.id === "transactions" || section.id === "customers");
   const governanceSections = visibleSections.filter((section) => section.id === "logs" || section.id === "admins");
-  const unreadNotifications = notifications.filter((item) => !item.readAt).length;
+  const unreadNotifications = notificationUnreadCount;
   const logUserOptions = useMemo(() => {
     const uniqueEmails = new Set<string>();
 
@@ -407,6 +412,104 @@ export function useAdminConsole() {
       void logAdminClientEvent(firebaseUser, "admin.section.changed", { section }).catch(() => {});
     }
   }
+
+  function prependOrUpdateNotification(notification: AdminNotification) {
+    setNotifications((current) => {
+      const existingIndex = current.findIndex((item) => item.id === notification.id);
+      if (existingIndex < 0) {
+        return [notification, ...current];
+      }
+
+      const next = [...current];
+      next[existingIndex] = notification;
+      return next;
+    });
+  }
+
+  const applyRealtimeEvent = useEffectEvent((event: AdminRealtimeEvent) => {
+    if (event.type === "notifications.snapshot_required") {
+      if (typeof event.payload.unreadCount === "number") {
+        setNotificationUnreadCount(event.payload.unreadCount);
+      }
+      return;
+    }
+
+    if (event.type === "notifications.created") {
+      if (notificationsLoaded) {
+        prependOrUpdateNotification(event.payload.notification);
+      }
+
+      if (typeof event.payload.unreadCount === "number") {
+        setNotificationUnreadCount(event.payload.unreadCount);
+      } else if (!event.payload.notification.readAt) {
+        setNotificationUnreadCount((current) => current + 1);
+      }
+      return;
+    }
+
+    if (event.type === "notifications.updated") {
+      if (notificationsLoaded) {
+        prependOrUpdateNotification(event.payload.notification);
+      }
+
+      if (typeof event.payload.unreadCount === "number") {
+        setNotificationUnreadCount(event.payload.unreadCount);
+      }
+      return;
+    }
+
+    if (event.type === "notifications.dismissed") {
+      if (notificationsLoaded) {
+        setNotifications((current) =>
+          current.filter((item) => item.id !== event.payload.notificationId),
+        );
+      }
+
+      if (typeof event.payload.unreadCount === "number") {
+        setNotificationUnreadCount(event.payload.unreadCount);
+      }
+      return;
+    }
+
+    if (event.type === "notifications.read_all") {
+      if (notificationsLoaded) {
+        setNotifications((current) =>
+          current.map((item) => ({
+            ...item,
+            readAt: item.readAt || event.payload.updatedAt,
+          })),
+        );
+      }
+
+      if (typeof event.payload.unreadCount === "number") {
+        setNotificationUnreadCount(event.payload.unreadCount);
+      } else {
+        setNotificationUnreadCount(0);
+      }
+      return;
+    }
+
+    if (event.type === "session.revoked") {
+      setAuthorizationError("Your admin session is no longer valid.");
+      setSession(null);
+    }
+  });
+
+  useEffect(() => {
+    if (!firebaseUser || !session) {
+      return;
+    }
+
+    const connection = connectAdminRealtime(firebaseUser, {
+      onEvent(event) {
+        applyRealtimeEvent(event);
+      },
+    });
+
+    return () => {
+      connection.close();
+    };
+  }, [applyRealtimeEvent, firebaseUser, session]);
 
   function ensurePermission(condition: boolean, message: string) {
     if (condition) {
@@ -685,9 +788,21 @@ export function useAdminConsole() {
 
     try {
       await runBusyAction("Updating notification...", async () => {
+        const existing = notifications.find((item) => item.id === notificationId) || null;
         const payload = await markAdminNotification(firebaseUser, notificationId, status);
         const nextNotification = payload.notification;
         setNotifications((current) => current.map((item) => (item.id === notificationId && nextNotification ? nextNotification : item)));
+        if (nextNotification && existing) {
+          setNotificationUnreadCount((current) =>
+            status === "read"
+              ? existing.readAt
+                ? current
+                : Math.max(current - 1, 0)
+              : existing.readAt
+                ? current + 1
+                : current,
+          );
+        }
       });
     } catch (error) {
       pushToast({
@@ -702,8 +817,12 @@ export function useAdminConsole() {
 
     try {
       await runBusyAction("Dismissing notification...", async () => {
+        const existing = notifications.find((item) => item.id === notificationId) || null;
         await dismissAdminNotification(firebaseUser, notificationId);
         setNotifications((current) => current.filter((item) => item.id !== notificationId));
+        if (existing && !existing.readAt) {
+          setNotificationUnreadCount((current) => Math.max(current - 1, 0));
+        }
       });
     } catch (error) {
       pushToast({
@@ -726,6 +845,7 @@ export function useAdminConsole() {
       await runBusyAction("Marking notifications as read...", async () => {
         await markAllAdminNotificationsRead(firebaseUser);
         setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+        setNotificationUnreadCount(0);
       });
     } catch (error) {
       pushToast({

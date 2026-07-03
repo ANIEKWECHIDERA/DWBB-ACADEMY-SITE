@@ -1,6 +1,7 @@
 export function registerAdminRoutes(
   app,
   {
+    adminRealtime,
     adminService,
     courseService,
     deleteAdminUserByEmail,
@@ -345,6 +346,9 @@ export function registerAdminRoutes(
       }
 
       const notification = await updateNotificationStatus(req.params.id, status);
+      if (notification) {
+        await adminRealtime.broadcastNotificationUpdated(notification);
+      }
       await adminService.recordAuditLogSafe({
         actorEmail: req.adminUser.email,
         actorRole: req.adminUser.role,
@@ -362,6 +366,9 @@ export function registerAdminRoutes(
     requireAdminAuth(),
     async (req, res) => {
       const updatedCount = await markAllNotificationsRead();
+      await adminRealtime.broadcastNotificationsReadAll({
+        updatedAt: new Date().toISOString(),
+      });
       await adminService.recordAuditLogSafe({
         actorEmail: req.adminUser.email,
         actorRole: req.adminUser.role,
@@ -378,7 +385,10 @@ export function registerAdminRoutes(
     "/api/admin/notifications/:id",
     requireAdminAuth(),
     async (req, res) => {
-      await dismissNotification(req.params.id);
+      const notification = await dismissNotification(req.params.id);
+      if (notification) {
+        await adminRealtime.broadcastNotificationDismissed(req.params.id);
+      }
       await adminService.recordAuditLogSafe({
         actorEmail: req.adminUser.email,
         actorRole: req.adminUser.role,

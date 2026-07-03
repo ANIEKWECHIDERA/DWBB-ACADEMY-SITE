@@ -84,6 +84,67 @@ export function createAdminService({
     return adminUser;
   }
 
+  async function authenticateAdminToken(
+    token,
+    {
+      getFirebaseAdminAuth,
+      superAdminOnly = false,
+      requestLogger,
+    } = {},
+  ) {
+    if (!token) {
+      requestLogger?.warn("auth.admin.missing_token");
+      throw new Error("Authentication required.");
+    }
+
+    const auth = getFirebaseAdminAuth?.();
+    if (!auth) {
+      requestLogger?.error("auth.admin.firebase_not_configured");
+      throw new Error("Admin authentication is not configured.");
+    }
+
+    const decodedToken = await auth.verifyIdToken(token, true);
+    const email = normalizeEmail(decodedToken.email);
+
+    if (!email) {
+      requestLogger?.warn("auth.admin.email_required", {
+        uid: decodedToken.uid,
+      });
+      throw new Error("A verified email is required.");
+    }
+
+    const adminUser = await resolveAdminUser(email, decodedToken.uid);
+    if (!adminUser || adminUser.active === false) {
+      requestLogger?.warn("auth.admin.access_denied", {
+        email,
+        uid: decodedToken.uid,
+      });
+      throw new Error("You do not have access to this console.");
+    }
+
+    if (superAdminOnly && adminUser.role !== "super_admin") {
+      requestLogger?.warn("auth.admin.super_admin_required", {
+        email,
+        uid: decodedToken.uid,
+        role: adminUser.role,
+      });
+      throw new Error("Super admin access is required.");
+    }
+
+    requestLogger?.info("auth.admin.authenticated", {
+      uid: decodedToken.uid,
+      protected: adminUser.protected === true,
+    });
+
+    return {
+      uid: decodedToken.uid,
+      email,
+      role: adminUser.role,
+      active: adminUser.active !== false,
+      protected: adminUser.protected === true,
+    };
+  }
+
   function requireAdminAuth({ getFirebaseAdminAuth, superAdminOnly } = {}) {
     return async (req, res, next) => {
       try {
@@ -91,68 +152,14 @@ export function createAdminService({
         const token = authHeader.startsWith("Bearer ")
           ? authHeader.slice(7)
           : "";
-
-        if (!token) {
-          req.requestLogger?.warn("auth.admin.missing_token");
-          return res.status(401).json({ error: "Authentication required." });
-        }
-
-        const auth = getFirebaseAdminAuth();
-        if (!auth) {
-          req.requestLogger?.error("auth.admin.firebase_not_configured");
-          return res
-            .status(503)
-            .json({ error: "Admin authentication is not configured." });
-        }
-
-        const decodedToken = await auth.verifyIdToken(token, true);
-        const email = normalizeEmail(decodedToken.email);
-
-        if (!email) {
-          req.requestLogger?.warn("auth.admin.email_required", {
-            uid: decodedToken.uid,
-          });
-          return res
-            .status(403)
-            .json({ error: "A verified email is required." });
-        }
-
-        const adminUser = await resolveAdminUser(email, decodedToken.uid);
-        if (!adminUser || adminUser.active === false) {
-          req.requestLogger?.warn("auth.admin.access_denied", {
-            email,
-            uid: decodedToken.uid,
-          });
-          return res
-            .status(403)
-            .json({ error: "You do not have access to this console." });
-        }
-
-        if (superAdminOnly && adminUser.role !== "super_admin") {
-          req.requestLogger?.warn("auth.admin.super_admin_required", {
-            email,
-            uid: decodedToken.uid,
-            role: adminUser.role,
-          });
-          return res
-            .status(403)
-            .json({ error: "Super admin access is required." });
-        }
-
-        req.adminUser = {
-          uid: decodedToken.uid,
-          email,
-          role: adminUser.role,
-          active: adminUser.active !== false,
-          protected: adminUser.protected === true,
-        };
-        req.requestLogger = req.requestLogger?.child({
-          actorEmail: email,
-          actorRole: adminUser.role,
+        req.adminUser = await authenticateAdminToken(token, {
+          getFirebaseAdminAuth,
+          requestLogger: req.requestLogger,
+          superAdminOnly,
         });
-        req.requestLogger?.info("auth.admin.authenticated", {
-          uid: decodedToken.uid,
-          protected: adminUser.protected === true,
+        req.requestLogger = req.requestLogger?.child({
+          actorEmail: req.adminUser.email,
+          actorRole: req.adminUser.role,
         });
 
         next();
@@ -163,6 +170,21 @@ export function createAdminService({
             error:
               "Firestore usage is temporarily exhausted. The admin console will be available again once quota resets or billing is increased.",
           });
+        }
+        if (error instanceof Error) {
+          if (error.message === "Authentication required.") {
+            return res.status(401).json({ error: error.message });
+          }
+          if (error.message === "Admin authentication is not configured.") {
+            return res.status(503).json({ error: error.message });
+          }
+          if (
+            error.message === "A verified email is required." ||
+            error.message === "You do not have access to this console." ||
+            error.message === "Super admin access is required."
+          ) {
+            return res.status(403).json({ error: error.message });
+          }
         }
         res
           .status(401)
@@ -297,6 +319,7 @@ export function createAdminService({
     readCachedAdminUser,
     recordAdminLoginSafe,
     recordAuditLogSafe,
+    authenticateAdminToken,
     requireAdminAuth,
     restorePendingAuditLogs,
     resolveAdminUser,

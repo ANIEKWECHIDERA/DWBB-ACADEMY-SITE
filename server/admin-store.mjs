@@ -349,6 +349,17 @@ export async function listNotifications(limit = 100) {
   };
 }
 
+export async function getUnreadNotificationCount() {
+  const firestore = firestoreRequired();
+  const snapshot = await firestore
+    .collection(COLLECTIONS.notifications)
+    .where("readAt", "==", null)
+    .where("dismissedAt", "==", null)
+    .get();
+
+  return snapshot.size;
+}
+
 export async function updateNotificationStatus(id, status) {
   const firestore = firestoreRequired();
   const ref = firestore.collection(COLLECTIONS.notifications).doc(id);
@@ -367,13 +378,18 @@ export async function updateNotificationStatus(id, status) {
 
 export async function dismissNotification(id) {
   const firestore = firestoreRequired();
-  await firestore.collection(COLLECTIONS.notifications).doc(id).set(
+  const ref = firestore.collection(COLLECTIONS.notifications).doc(id);
+  const current = await ref.get();
+
+  await ref.set(
     {
       dismissedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
     { merge: true },
   );
+
+  return current.exists ? { id: current.id, ...current.data() } : null;
 }
 
 export async function markAllNotificationsRead() {
@@ -422,25 +438,24 @@ export async function mirrorVerifiedPurchase({ purchase, transaction, course }) 
     updatedAt: new Date().toISOString(),
   };
 
+  const notificationPayload = {
+    kind: "purchase",
+    title: "New purchase received",
+    message: `${purchase.name} purchased ${purchase.courseTitle}.`,
+    courseSlug: purchase.courseSlug,
+    courseTitle: purchase.courseTitle,
+    customerName: purchase.name,
+    customerEmail: normalizedEmail,
+    transactionReference: purchase.reference,
+    amountKobo: Number(transaction.amount),
+    createdAt: purchase.paidAt,
+    readAt: null,
+    dismissedAt: null,
+    updatedAt: new Date().toISOString(),
+  };
+
   await transactionRef.set(transactionPayload, { merge: true });
-  await notificationRef.set(
-    {
-      kind: "purchase",
-      title: "New purchase received",
-      message: `${purchase.name} purchased ${purchase.courseTitle}.`,
-      courseSlug: purchase.courseSlug,
-      courseTitle: purchase.courseTitle,
-      customerName: purchase.name,
-      customerEmail: normalizedEmail,
-      transactionReference: purchase.reference,
-      amountKobo: Number(transaction.amount),
-      createdAt: purchase.paidAt,
-      readAt: null,
-      dismissedAt: null,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true },
-  );
+  await notificationRef.set(notificationPayload, { merge: true });
 
   if (customerRef) {
     const customerDoc = await customerRef.get();
@@ -463,7 +478,13 @@ export async function mirrorVerifiedPurchase({ purchase, transaction, course }) 
     );
   }
 
-  return transactionPayload;
+  return {
+    notification: {
+      id: purchase.reference,
+      ...notificationPayload,
+    },
+    transaction: transactionPayload,
+  };
 }
 
 function getRangeStart(range) {

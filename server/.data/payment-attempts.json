@@ -156,5 +156,41 @@
     "email": "chideraaniekwederah73@gmail.com",
     "appBaseUrl": "http://127.0.0.1:5173",
     "createdAt": "2026-07-02T17:29:03.516Z"
+  },
+  {
+    "reference": "dwbb-ai-automation-1783086133588-lhfuoz",
+    "accessCode": "bo7j1v79g4tx2x5",
+    "courseSlug": "ai-automation",
+    "courseTitle": "AI & Automation",
+    "amount": 18200000,
+    "processingFeeKobo": 200000,
+    "targetAmountKobo": 18000000,
+    "email": "chideraaniekwederah73@gmail.com",
+    "appBaseUrl": "http://127.0.0.1:5173",
+    "createdAt": "2026-07-03T13:42:14.614Z"
+  },
+  {
+    "reference": "dwbb-mobile-app-1783086564649-f1oum2",
+    "accessCode": "sksmiv7vtftrjmj",
+    "courseSlug": "mobile-app",
+    "courseTitle": "Mobile App Development",
+    "amount": 30700000,
+    "processingFeeKobo": 200000,
+    "targetAmountKobo": 30500000,
+    "email": "chideraaniekwederah73@gmail.com",
+    "appBaseUrl": "http://127.0.0.1:5173",
+    "createdAt": "2026-07-03T13:49:25.487Z"
+  },
+  {
+    "reference": "dwbb-machine-learning-1783089270457-yqhu8y",
+    "accessCode": "j9q7ddxlzxxbwwo",
+    "courseSlug": "machine-learning",
+    "courseTitle": "Machine Learning",
+    "amount": 40200000,
+    "processingFeeKobo": 200000,
+    "targetAmountKobo": 40000000,
+    "email": "chideraaniekwederah73@gmail.com",
+    "appBaseUrl": "http://127.0.0.1:5173",
+    "createdAt": "2026-07-03T14:34:31.771Z"
   }
 ]

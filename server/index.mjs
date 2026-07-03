@@ -9,6 +9,7 @@ import {
   deleteTransactionsByReference,
   dismissNotification,
   ensureManagedCoursesSeeded,
+  getUnreadNotificationCount,
   getAdminUserByEmail,
   getDashboardMetrics,
   getManagedCourse,
@@ -59,6 +60,7 @@ import { registerAdminRoutes } from "./routes/admin-routes.mjs";
 import { registerPaymentRoutes } from "./routes/payment-routes.mjs";
 import { registerPublicRoutes } from "./routes/public-routes.mjs";
 import { createAdminService } from "./services/admin-service.mjs";
+import { createAdminRealtimeService } from "./services/admin-realtime.mjs";
 import { createCourseService } from "./services/course-service.mjs";
 import { createHttpService } from "./services/http.mjs";
 import { createMailer } from "./services/mailer.mjs";
@@ -129,13 +131,23 @@ const adminService = createAdminService({
   recordAdminLogin,
 });
 
+const adminRealtime = createAdminRealtimeService({
+  authenticateAdminToken: adminService.authenticateAdminToken,
+  getFirebaseAdminAuth,
+  getUnreadNotificationCount,
+  isFirebaseAdminConfigured: isFirebaseAdminConfigured(),
+  logServerError,
+});
+
 const paymentService = createPaymentService({
+  adminRealtime,
   appBaseUrl,
   createDownloadExpiry: purchaseStore.createDownloadExpiry,
   createPurchaseRecord: purchaseStore.createPurchaseRecord,
   downloadLinkTtlDays,
   findPaymentAttempt: purchaseStore.findPaymentAttempt,
   findPurchaseByReference: purchaseStore.findPurchaseByReference,
+  formatNaira,
   getCourseForCheckout: courseService.getCourseForCheckout,
   logServerError,
   mailer,
@@ -217,6 +229,7 @@ registerPublicRoutes(app, {
 });
 
 registerAdminRoutes(app, {
+  adminRealtime,
   adminService,
   clearManagedCourseAssets,
   courseService,
@@ -264,9 +277,11 @@ registerPaymentRoutes(app, {
   webhookRateLimit,
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`DWBB Academy backend running on http://localhost:${port}`);
 });
+
+adminRealtime.attachToServer(server);
 
 function getSuperAdminEmails() {
   return String(process.env.SUPER_ADMIN_EMAILS || "")
@@ -277,12 +292,13 @@ function getSuperAdminEmails() {
 
 async function mirrorPurchaseSafe(payload) {
   if (!isFirebaseAdminConfigured()) {
-    return;
+    return null;
   }
 
   try {
-    await mirrorVerifiedPurchase(payload);
+    return await mirrorVerifiedPurchase(payload);
   } catch (error) {
     logServerError("Firestore purchase mirror failed", error);
+    return null;
   }
 }
