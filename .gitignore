@@ -15,6 +15,7 @@ dist-ssr
 .env.*
 server/.data/*
 !server/.data/.gitkeep
+server/logs/*
 
 # Editor directories and files
 .vscode/*

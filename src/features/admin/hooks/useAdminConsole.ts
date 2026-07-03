@@ -23,6 +23,7 @@ import {
   getAdminTransactions,
   getAdminUsers,
   loadAdminNotifications,
+  logAdminClientEvent,
   markAdminNotification,
   markAllAdminNotificationsRead,
   reorderAdminCourses,
@@ -125,6 +126,7 @@ export function useAdminConsole() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const selectedCourseSlugRef = useRef(selectedCourseSlug);
+  const sessionEventLoggedRef = useRef(false);
 
   const currentUserEmail = useMemo(() => String(session?.user.email || "").trim().toLowerCase(), [session?.user.email]);
 
@@ -151,6 +153,7 @@ export function useAdminConsole() {
       try {
         const nextSession = await getAdminSession(user);
         setSession(nextSession);
+        sessionEventLoggedRef.current = false;
       } catch (error) {
         setSession(null);
         setAuthorizationError(error instanceof Error ? error.message : "You do not have access to this console.");
@@ -246,6 +249,9 @@ export function useAdminConsole() {
     }
 
     try {
+      await logAdminClientEvent(firebaseUser, "admin.notifications.opened", {
+        source: activeSection,
+      }).catch(() => {});
       const payload = await loadAdminNotifications(firebaseUser);
       setNotifications(payload.notifications);
       setNotificationsLoaded(true);
@@ -255,7 +261,7 @@ export function useAdminConsole() {
         description: error instanceof Error ? error.message : "Unable to load notifications right now.",
       });
     }
-  }, [firebaseUser, notificationsLoaded, pushToast]);
+  }, [activeSection, firebaseUser, notificationsLoaded, pushToast]);
 
   const loadLogsOnce = useCallback(async () => {
     if (!firebaseUser || !session?.permissions.canViewAuditLogs || logsLoaded) {
@@ -299,6 +305,21 @@ export function useAdminConsole() {
       void loadLogsOnce();
     }
   }, [activeSection, loadLogsOnce, loadNotificationsOnce]);
+
+  useEffect(() => {
+    if (!firebaseUser || !session || sessionEventLoggedRef.current) {
+      return;
+    }
+
+    sessionEventLoggedRef.current = true;
+    const navigationEntry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const navigationType = navigationEntry?.type || "navigate";
+    const eventName = navigationType === "reload" ? "admin.console.refreshed" : "admin.console.loaded";
+
+    void logAdminClientEvent(firebaseUser, eventName, {
+      navigationType,
+    }).catch(() => {});
+  }, [firebaseUser, session]);
 
   const visibleSections = useMemo(() => {
     if (!session) return [];
@@ -382,6 +403,9 @@ export function useAdminConsole() {
   function handleSetActiveSection(section: AdminSection) {
     setActiveSection(section);
     setMobileSidebarOpen(false);
+    if (firebaseUser) {
+      void logAdminClientEvent(firebaseUser, "admin.section.changed", { section }).catch(() => {});
+    }
   }
 
   function ensurePermission(condition: boolean, message: string) {
@@ -745,6 +769,9 @@ export function useAdminConsole() {
       return;
     }
 
+    if (firebaseUser) {
+      await logAdminClientEvent(firebaseUser, "admin.logout.initiated").catch(() => {});
+    }
     await signOut(firebaseAuth);
   }
 

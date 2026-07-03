@@ -258,4 +258,15 @@ export async function deleteAdminUser(user: User, email: string) {
   }
 }
 
+export async function logAdminClientEvent(
+  user: User,
+  event: "admin.console.loaded" | "admin.console.refreshed" | "admin.logout.initiated" | "admin.notifications.opened" | "admin.section.changed",
+  metadata: Record<string, unknown> = {},
+) {
+  await adminFetch<null>(user, "/api/admin/client-events", {
+    method: "POST",
+    body: JSON.stringify({ event, metadata }),
+  });
+}
+
 export type { AdminRange };

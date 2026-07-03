@@ -39,6 +39,7 @@ import {
 } from "./admin-store.mjs";
 import { digitalCourseCatalog, findDigitalCourse } from "./course-catalog.mjs";
 import { getFirebaseAdminAuth, getFirebaseAdminFirestore, isFirebaseAdminConfigured } from "./firebase-admin.mjs";
+import { childLogger, logger } from "./logger.mjs";
 import { getCheckoutPricing } from "../src/lib/paystackPricing.js";
 
 dotenv.config();
@@ -107,6 +108,32 @@ app.use(
     },
   }),
 );
+app.use((req, res, next) => {
+  req.requestId = crypto.randomUUID();
+  req.requestLogger = childLogger({
+    requestId: req.requestId,
+    method: req.method,
+    path: req.path,
+  });
+
+  const startedAt = Date.now();
+  req.requestLogger.debug("request.received", {
+    query: req.query,
+    ip: getClientIdentifier(req),
+    userAgent: req.headers["user-agent"] || "",
+  });
+
+  res.on("finish", () => {
+    req.requestLogger.info("request.completed", {
+      statusCode: res.statusCode,
+      durationMs: Date.now() - startedAt,
+      actorEmail: req.adminUser?.email || null,
+      actorRole: req.adminUser?.role || null,
+    });
+  });
+
+  next();
+});
 
 const initializeRateLimit = createRateLimiter({ key: "payments-initialize", max: 12, windowMs: 15 * 60 * 1000 });
 const verifyRateLimit = createRateLimiter({ key: "payments-verify", max: 60, windowMs: 15 * 60 * 1000 });
@@ -154,6 +181,10 @@ app.get("/api/admin/session", requireAdminAuth(), async (req, res) => {
   }
 
   await recordAdminLoginSafe(adminUser);
+  req.requestLogger?.info("admin.session.loaded", {
+    actorEmail: adminUser.email,
+    actorRole: adminUser.role,
+  });
 
   res.json({
     user: adminUser,
@@ -384,6 +415,11 @@ app.get("/api/admin/notifications", requireAdminAuth(), async (req, res) => {
 
 app.post("/api/admin/notifications/load", requireAdminAuth(), async (req, res) => {
   const payload = await listNotificationsSafe();
+  req.requestLogger?.info("admin.notifications.loaded", {
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    unreadCount: payload.unreadCount,
+  });
   res.json(payload);
 });
 
@@ -464,6 +500,12 @@ app.post("/api/admin/audit-logs/sync", requireAdminAuth({ superAdminOnly: true }
 
   try {
     const syncedCount = await recordAuditLogsBatch(queueSnapshot);
+    req.requestLogger?.info("admin.audit_logs.synced", {
+      actorEmail: req.adminUser.email,
+      actorRole: req.adminUser.role,
+      syncedCount,
+      pendingAuditLogCount: pendingAuditLogs.length,
+    });
     res.json({ syncedCount, pendingAuditLogCount: pendingAuditLogs.length });
   } catch (error) {
     pendingAuditLogs.unshift(...queueSnapshot);
@@ -552,6 +594,31 @@ app.delete("/api/admin/users/:email", requireAdminAuth({ superAdminOnly: true })
   });
 
   res.status(204).end();
+});
+
+app.post("/api/admin/client-events", requireAdminAuth(), async (req, res) => {
+  const event = typeof req.body?.event === "string" ? req.body.event.trim() : "";
+  const metadata = req.body?.metadata && typeof req.body.metadata === "object" ? req.body.metadata : {};
+  const allowedEvents = new Set([
+    "admin.console.loaded",
+    "admin.console.refreshed",
+    "admin.logout.initiated",
+    "admin.notifications.opened",
+    "admin.section.changed",
+  ]);
+
+  if (!allowedEvents.has(event)) {
+    return res.status(400).json({ error: "A valid client event is required." });
+  }
+
+  req.requestLogger?.info("admin.client_event", {
+    actorEmail: req.adminUser.email,
+    actorRole: req.adminUser.role,
+    event,
+    metadata,
+  });
+
+  res.json({ ok: true });
 });
 
 app.get("/api/payments/debug/attempts", requirePaymentDebug, async (_req, res) => {
@@ -919,11 +986,13 @@ function requireAdminAuth(options = {}) {
       const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
       if (!token) {
+        req.requestLogger?.warn("auth.admin.missing_token");
         return res.status(401).json({ error: "Authentication required." });
       }
 
       const auth = getFirebaseAdminAuth();
       if (!auth) {
+        req.requestLogger?.error("auth.admin.firebase_not_configured");
         return res.status(503).json({ error: "Admin authentication is not configured." });
       }
 
@@ -931,15 +1000,27 @@ function requireAdminAuth(options = {}) {
       const email = normalizeEmail(decodedToken.email);
 
       if (!email) {
+        req.requestLogger?.warn("auth.admin.email_required", {
+          uid: decodedToken.uid,
+        });
         return res.status(403).json({ error: "A verified email is required." });
       }
 
       const adminUser = await resolveAdminUser(email, decodedToken.uid);
       if (!adminUser || adminUser.active === false) {
+        req.requestLogger?.warn("auth.admin.access_denied", {
+          email,
+          uid: decodedToken.uid,
+        });
         return res.status(403).json({ error: "You do not have access to this console." });
       }
 
       if (options.superAdminOnly && adminUser.role !== "super_admin") {
+        req.requestLogger?.warn("auth.admin.super_admin_required", {
+          email,
+          uid: decodedToken.uid,
+          role: adminUser.role,
+        });
         return res.status(403).json({ error: "Super admin access is required." });
       }
 
@@ -948,7 +1029,16 @@ function requireAdminAuth(options = {}) {
         email,
         role: adminUser.role,
         active: adminUser.active !== false,
+        protected: adminUser.protected === true,
       };
+      req.requestLogger = req.requestLogger?.child({
+        actorEmail: email,
+        actorRole: adminUser.role,
+      });
+      req.requestLogger?.info("auth.admin.authenticated", {
+        uid: decodedToken.uid,
+        protected: adminUser.protected === true,
+      });
 
       next();
     } catch (error) {
@@ -1757,14 +1847,18 @@ function formatNaira(amount) {
 
 function logServerError(context, error) {
   if (error instanceof Error) {
-    console.error(`${context}: ${error.message}`);
-    if (error.stack) {
-      console.error(error.stack);
-    }
+    logger.error("server.error", {
+      context,
+      message: error.message,
+      stack: error.stack,
+    });
     return;
   }
 
-  console.error(`${context}:`, error);
+  logger.error("server.error", {
+    context,
+    error,
+  });
 }
 
 function isFirestoreQuotaError(error) {
