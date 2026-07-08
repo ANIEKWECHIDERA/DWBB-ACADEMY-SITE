@@ -188,8 +188,8 @@ export function createPaymentService({
       await adminRealtime?.broadcastNotificationCreated(mirrorResult.notification);
     }
 
-    try {
-      await mailer.sendPurchaseAlertEmail({
+    void mailer
+      .sendPurchaseAlertEmail({
         chargedAmount: formatNaira(Math.round(amountPaidKobo / 100)),
         courseTitle: course.title,
         customerEmail: transaction.customer?.email || "",
@@ -198,10 +198,10 @@ export function createPaymentService({
         paidAt: purchase.paidAt,
         phone: customerPhone,
         reference,
+      })
+      .catch((error) => {
+        logServerError(`Purchase alert email failed for ${reference}`, error);
       });
-    } catch (error) {
-      logServerError(`Purchase alert email failed for ${reference}`, error);
-    }
 
     let emailMessage = `Payment verified. Download access is ready for ${downloadLinkTtlDays} days.`;
 

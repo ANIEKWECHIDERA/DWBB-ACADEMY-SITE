@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 
 export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
   let cachedTransportPromise;
+  let cachedVerifyPromise;
 
   async function sendConfirmationEmail({
     courseTitle,
@@ -161,6 +162,30 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
     });
   }
 
+  async function verifyConnection() {
+    if (!cachedVerifyPromise) {
+      cachedVerifyPromise = (async () => {
+        const transporter = await createMailTransport();
+        await transporter.verify();
+        return {
+          host: process.env.SMTP_HOST || "ethereal.test",
+          port: Number(process.env.SMTP_PORT || 587),
+          secure: String(process.env.SMTP_SECURE || "false") === "true",
+          usingCredentials: Boolean(
+            process.env.SMTP_HOST &&
+              process.env.SMTP_USER &&
+              process.env.SMTP_PASS,
+          ),
+        };
+      })().catch((error) => {
+        cachedVerifyPromise = null;
+        throw error;
+      });
+    }
+
+    return cachedVerifyPromise;
+  }
+
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -182,6 +207,19 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
             host: process.env.SMTP_HOST,
             port: Number(process.env.SMTP_PORT || 587),
             secure: String(process.env.SMTP_SECURE || "false") === "true",
+            connectionTimeout: Number(
+              process.env.SMTP_CONNECTION_TIMEOUT_MS || 10000,
+            ),
+            greetingTimeout: Number(
+              process.env.SMTP_GREETING_TIMEOUT_MS || 10000,
+            ),
+            socketTimeout: Number(
+              process.env.SMTP_SOCKET_TIMEOUT_MS || 20000,
+            ),
+            tls: {
+              minVersion: "TLSv1.2",
+              servername: process.env.SMTP_HOST,
+            },
             auth: {
               user: process.env.SMTP_USER,
               pass: process.env.SMTP_PASS,
@@ -206,6 +244,7 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
   }
 
   return {
+    verifyConnection,
     sendConfirmationEmail,
     sendPurchaseAlertEmail,
   };
