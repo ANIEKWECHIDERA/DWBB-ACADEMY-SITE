@@ -39,6 +39,7 @@ export function createPaymentService({
   }
 
   async function verifyAndFulfill(reference, options = {}) {
+    const verificationStartedAt = Date.now();
     const response = await fetch(
       `https://api.paystack.co/transaction/verify/${reference}`,
       {
@@ -199,6 +200,17 @@ export function createPaymentService({
         phone: customerPhone,
         reference,
       })
+      .then((alertResult) => {
+        console.info(
+          JSON.stringify({
+            message: "payments.email.purchase_alert.sent",
+            reference,
+            durationMs: alertResult?.durationMs ?? null,
+            courseSlug: course.slug,
+            recipient: "dwbbacademy@gmail.com",
+          }),
+        );
+      })
       .catch((error) => {
         logServerError(`Purchase alert email failed for ${reference}`, error);
       });
@@ -213,6 +225,22 @@ export function createPaymentService({
           email: transaction.customer?.email,
           downloadUrl,
         });
+
+        console.info(
+          JSON.stringify({
+            message: "payments.email.confirmation.sent",
+            reference,
+            recipient: transaction.customer?.email || null,
+            durationMs: emailResult.durationMs ?? null,
+            acceptedCount: Array.isArray(emailResult.accepted)
+              ? emailResult.accepted.length
+              : null,
+            rejectedCount: Array.isArray(emailResult.rejected)
+              ? emailResult.rejected.length
+              : null,
+            response: emailResult.response || null,
+          }),
+        );
 
         purchase.emailPreviewUrl = emailResult.previewUrl || null;
         purchase.emailDeliveryStatus = "sent";
@@ -239,6 +267,7 @@ export function createPaymentService({
       courseTitle: course.title,
       emailPreviewUrl: purchase.emailPreviewUrl,
       downloadUrl,
+      verificationDurationMs: Date.now() - verificationStartedAt,
       message: emailMessage,
     };
   }

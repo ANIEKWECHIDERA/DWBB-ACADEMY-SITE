@@ -283,6 +283,19 @@ const server = app.listen(port, () => {
 
 adminRealtime.attachToServer(server);
 
+void mailer
+  .verifyConnection()
+  .then((result) => {
+    logger.info("mailer.verify_connection.succeeded", result);
+  })
+  .catch((error) => {
+    logger.error("mailer.verify_connection.failed", {
+      ...mailer.getMailConfigSnapshot(),
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+  });
+
 function getSuperAdminEmails() {
   return String(process.env.SUPER_ADMIN_EMAILS || "")
     .split(",")

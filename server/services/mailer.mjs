@@ -4,6 +4,27 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
   let cachedTransportPromise;
   let cachedVerifyPromise;
 
+  function getMailConfigSnapshot() {
+    return {
+      host: process.env.SMTP_HOST || "ethereal.test",
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: String(process.env.SMTP_SECURE || "false") === "true",
+      from: process.env.SMTP_FROM || "DWBB Academy <no-reply@dwbbacademy.com>",
+      usingCredentials: Boolean(
+        process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS,
+      ),
+      hasUser: Boolean(process.env.SMTP_USER),
+      hasPass: Boolean(process.env.SMTP_PASS),
+      connectionTimeoutMs: Number(
+        process.env.SMTP_CONNECTION_TIMEOUT_MS || 10000,
+      ),
+      greetingTimeoutMs: Number(
+        process.env.SMTP_GREETING_TIMEOUT_MS || 10000,
+      ),
+      socketTimeoutMs: Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 20000),
+    };
+  }
+
   async function sendConfirmationEmail({
     courseTitle,
     customerName,
@@ -63,6 +84,7 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
       </div>
     `.trim();
 
+    const sendStartedAt = Date.now();
     const transporter = await createMailTransport();
     const info = await transporter.sendMail({
       from: process.env.SMTP_FROM || "DWBB Academy <no-reply@dwbbacademy.com>",
@@ -84,7 +106,11 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
     });
 
     return {
+      durationMs: Date.now() - sendStartedAt,
       previewUrl: nodemailer.getTestMessageUrl(info) || null,
+      accepted: Array.isArray(info.accepted) ? info.accepted : [],
+      rejected: Array.isArray(info.rejected) ? info.rejected : [],
+      response: info.response || null,
     };
   }
 
@@ -142,6 +168,7 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
       </div>
     `.trim();
 
+    const sendStartedAt = Date.now();
     await transporter.sendMail({
       from: process.env.SMTP_FROM || "DWBB Academy <no-reply@dwbbacademy.com>",
       to: "dwbbacademy@gmail.com",
@@ -160,22 +187,21 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
         `Paid At: ${paidAt || "-"}`,
       ].join("\n"),
     });
+
+    return {
+      durationMs: Date.now() - sendStartedAt,
+    };
   }
 
   async function verifyConnection() {
     if (!cachedVerifyPromise) {
       cachedVerifyPromise = (async () => {
+        const startedAt = Date.now();
         const transporter = await createMailTransport();
         await transporter.verify();
         return {
-          host: process.env.SMTP_HOST || "ethereal.test",
-          port: Number(process.env.SMTP_PORT || 587),
-          secure: String(process.env.SMTP_SECURE || "false") === "true",
-          usingCredentials: Boolean(
-            process.env.SMTP_HOST &&
-              process.env.SMTP_USER &&
-              process.env.SMTP_PASS,
-          ),
+          ...getMailConfigSnapshot(),
+          durationMs: Date.now() - startedAt,
         };
       })().catch((error) => {
         cachedVerifyPromise = null;
@@ -244,6 +270,7 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
   }
 
   return {
+    getMailConfigSnapshot,
     verifyConnection,
     sendConfirmationEmail,
     sendPurchaseAlertEmail,
