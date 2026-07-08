@@ -1,11 +1,15 @@
 import nodemailer from "nodemailer";
 
+const BREVO_API_BASE_URL = "https://api.brevo.com/v3";
+
 export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
   let cachedTransportPromise;
   let cachedVerifyPromise;
 
   function getMailConfigSnapshot() {
     return {
+      mode: getTransportMode(),
+      provider: "brevo",
       host: process.env.SMTP_HOST || "ethereal.test",
       port: Number(process.env.SMTP_PORT || 587),
       secure: String(process.env.SMTP_SECURE || "false") === "true",
@@ -15,6 +19,7 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
       ),
       hasUser: Boolean(process.env.SMTP_USER),
       hasPass: Boolean(process.env.SMTP_PASS),
+      hasBrevoApiKey: Boolean(process.env.BREVO_API_KEY),
       connectionTimeoutMs: Number(
         process.env.SMTP_CONNECTION_TIMEOUT_MS || 10000,
       ),
@@ -84,34 +89,26 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
       </div>
     `.trim();
 
-    const sendStartedAt = Date.now();
-    const transporter = await createMailTransport();
-    const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || "DWBB Academy <no-reply@dwbbacademy.com>",
-      to: email,
-      subject: `Your ${courseTitle} download is ready`,
-      html,
-      text: [
-        `Hello ${customerName},`,
-        "",
-        `Thank you for purchasing ${courseTitle}.`,
-        "Your payment was confirmed successfully.",
-        "",
-        "Download your course materials using the secure button in the HTML email.",
-        `Direct fallback link: ${downloadUrl}`,
-        `This download link expires in ${downloadLinkTtlDays} days.`,
-        "",
-        "If you need help, reply to this email or contact DWBB Academy.",
-      ].join("\n"),
-    });
+    const subject = `Your ${courseTitle} download is ready`;
+    const text = [
+      `Hello ${customerName},`,
+      "",
+      `Thank you for purchasing ${courseTitle}.`,
+      "Your payment was confirmed successfully.",
+      "",
+      "Download your course materials using the secure button in the HTML email.",
+      `Direct fallback link: ${downloadUrl}`,
+      `This download link expires in ${downloadLinkTtlDays} days.`,
+      "",
+      "If you need help, reply to this email or contact DWBB Academy.",
+    ].join("\n");
 
-    return {
-      durationMs: Date.now() - sendStartedAt,
-      previewUrl: nodemailer.getTestMessageUrl(info) || null,
-      accepted: Array.isArray(info.accepted) ? info.accepted : [],
-      rejected: Array.isArray(info.rejected) ? info.rejected : [],
-      response: info.response || null,
-    };
+    return sendMail({
+      html,
+      subject,
+      text,
+      to: [email],
+    });
   }
 
   async function sendPurchaseAlertEmail({
@@ -124,7 +121,6 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
     phone,
     reference,
   }) {
-    const transporter = await createMailTransport();
     const safeAppBaseUrl = String(appBaseUrl || "http://localhost:5173").replace(
       /\/+$/,
       "",
@@ -168,28 +164,101 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
       </div>
     `.trim();
 
-    const sendStartedAt = Date.now();
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || "DWBB Academy <no-reply@dwbbacademy.com>",
-      to: "dwbbacademy@gmail.com",
-      subject: `New purchase: ${courseTitle}`,
+    const text = [
+      "A verified course purchase was completed.",
+      "",
+      `Course: ${courseTitle}`,
+      `Customer: ${customerName}`,
+      `Email: ${customerEmail || "-"}`,
+      `Phone: ${phone || "-"}`,
+      `Gross Charged: ${chargedAmount || "-"}`,
+      `Net Target: ${netAmount || "-"}`,
+      `Reference: ${reference || "-"}`,
+      `Paid At: ${paidAt || "-"}`,
+    ].join("\n");
+
+    return sendMail({
       html,
-      text: [
-        "A verified course purchase was completed.",
-        "",
-        `Course: ${courseTitle}`,
-        `Customer: ${customerName}`,
-        `Email: ${customerEmail || "-"}`,
-        `Phone: ${phone || "-"}`,
-        `Gross Charged: ${chargedAmount || "-"}`,
-        `Net Target: ${netAmount || "-"}`,
-        `Reference: ${reference || "-"}`,
-        `Paid At: ${paidAt || "-"}`,
-      ].join("\n"),
+      subject: `New purchase: ${courseTitle}`,
+      text,
+      to: ["dwbbacademy@gmail.com"],
+    });
+  }
+
+  async function sendMail({ html, subject, text, to }) {
+    const sendStartedAt = Date.now();
+    const transportMode = getTransportMode();
+
+    if (transportMode === "brevo_api") {
+      const result = await sendViaBrevoApi({
+        html,
+        subject,
+        text,
+        to,
+      });
+
+      return {
+        durationMs: Date.now() - sendStartedAt,
+        ...result,
+      };
+    }
+
+    const transporter = await createMailTransport();
+    const info = await transporter.sendMail({
+      from: process.env.SMTP_FROM || "DWBB Academy <no-reply@dwbbacademy.com>",
+      to,
+      subject,
+      html,
+      text,
     });
 
     return {
       durationMs: Date.now() - sendStartedAt,
+      previewUrl: nodemailer.getTestMessageUrl(info) || null,
+      accepted: Array.isArray(info.accepted) ? info.accepted : [],
+      rejected: Array.isArray(info.rejected) ? info.rejected : [],
+      response: info.response || null,
+      messageId: info.messageId || null,
+      provider: "smtp",
+    };
+  }
+
+  async function sendViaBrevoApi({ html, subject, text, to }) {
+    const sender = parseSender(
+      process.env.SMTP_FROM || "DWBB Academy <no-reply@dwbbacademy.com>",
+    );
+    const response = await fetch(`${BREVO_API_BASE_URL}/smtp/email`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "api-key": process.env.BREVO_API_KEY,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        sender,
+        to: to.map((email) => ({ email })),
+        subject,
+        htmlContent: html,
+        textContent: text,
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        payload?.message ||
+          payload?.code ||
+          `Brevo API request failed with status ${response.status}.`,
+      );
+    }
+
+    return {
+      accepted: [...to],
+      messageId: payload?.messageId || null,
+      previewUrl: null,
+      provider: "brevo_api",
+      rejected: [],
+      response: payload ? JSON.stringify(payload) : null,
     };
   }
 
@@ -197,6 +266,31 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
     if (!cachedVerifyPromise) {
       cachedVerifyPromise = (async () => {
         const startedAt = Date.now();
+        const mode = getTransportMode();
+
+        if (mode === "brevo_api") {
+          const response = await fetch(`${BREVO_API_BASE_URL}/account`, {
+            headers: {
+              accept: "application/json",
+              "api-key": process.env.BREVO_API_KEY,
+            },
+          });
+          const payload = await response.json().catch(() => null);
+
+          if (!response.ok) {
+            throw new Error(
+              payload?.message ||
+                payload?.code ||
+                `Brevo API verify failed with status ${response.status}.`,
+            );
+          }
+
+          return {
+            ...getMailConfigSnapshot(),
+            durationMs: Date.now() - startedAt,
+          };
+        }
+
         const transporter = await createMailTransport();
         await transporter.verify();
         return {
@@ -219,6 +313,14 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function getTransportMode() {
+    if (process.env.BREVO_API_KEY) {
+      return "brevo_api";
+    }
+
+    return "smtp";
   }
 
   async function createMailTransport() {
@@ -274,6 +376,20 @@ export function createMailer({ appBaseUrl, downloadLinkTtlDays }) {
     verifyConnection,
     sendConfirmationEmail,
     sendPurchaseAlertEmail,
+  };
+}
+
+function parseSender(senderValue) {
+  const raw = String(senderValue || "").trim();
+  const match = raw.match(/^(.*?)<([^>]+)>$/);
+
+  if (!match) {
+    return { email: raw };
+  }
+
+  return {
+    name: match[1].trim().replace(/^"|"$/g, ""),
+    email: match[2].trim(),
   };
 }
 
